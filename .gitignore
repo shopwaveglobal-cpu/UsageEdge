@@ -1,0 +1,13 @@
+.DS_Store
+.build/
+*.xcuserstate
+*.xcuserdatad/
+*.log
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+UsageEdge.app/Contents/MacOS/
+UsageEdge.app/Contents/_CodeSignature/

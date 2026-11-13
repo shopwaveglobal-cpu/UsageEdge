@@ -1,0 +1,22 @@
+#!/usr/bin/python3
+import sys,json,os,time
+mode=os.environ.get('USAGEEDGE_FAKE_MODE','success')
+def send(v): print(json.dumps(v),flush=True)
+for line in sys.stdin:
+ m=json.loads(line)
+ if m.get('method')=='initialize':send({'id':1,'result':{}})
+ if m.get('method')=='account/login/start':
+  if mode=='earlyexit':sys.exit(0)
+  host='evil.example' if mode=='wronghost' else 'chatgpt.com'
+  send({'id':3,'result':{'type':'chatgpt','loginId':'mock-id','authUrl':'https://'+host+'/login?state=test'}})
+  if mode=='cancel':time.sleep(10)
+  else:
+   time.sleep(.2)
+   send({'method':'account/login/completed','params':{'loginId':'mock-id','success':mode in ('success', 'race')}})
+ if m.get('method')=='account/rateLimits/read':
+  used=25
+  if mode=='race':
+   marker=os.environ['USAGEEDGE_FAKE_MARKER']
+   try: open(marker, 'x').close(); used=90; time.sleep(1)
+   except FileExistsError: pass
+  send({'id':2,'result':{'rateLimits':{'primary':{'usedPercent':used,'windowDurationMins':300}}}})
