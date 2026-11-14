@@ -1,5 +1,7 @@
 import http.server
 import pathlib
+import tempfile
+import os
 import shutil
 import subprocess
 import threading
@@ -22,5 +24,10 @@ thread = threading.Thread(target=server.serve_forever, daemon=True); thread.star
 try:
     shell = shutil.which('powershell.exe') or shutil.which('pwsh')
     subprocess.run([shell, '-NoProfile', '-File', str(root / 'Tests/Integration/windows_kimi_http.ps1'), '-Port', str(server.server_port)], check=True, timeout=60)
+    if os.name == 'nt':
+        with tempfile.TemporaryDirectory(prefix='usageedge-kimi-ui-') as folder:
+            token = pathlib.Path(folder) / 'server.token'; token.write_text('good')
+            env = dict(os.environ, USAGEEDGE_TEST_KIMI_TOKEN=str(token), USAGEEDGE_TEST_KIMI_PORT=str(server.server_port))
+            subprocess.run([shell, '-NoProfile', '-STA', '-File', str(root / 'Windows/UITest.ps1')], check=True, timeout=90, env=env)
 finally:
     server.shutdown(); server.server_close(); thread.join()
