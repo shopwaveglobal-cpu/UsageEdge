@@ -21,11 +21,11 @@ changes = [
  ('  if UserDefaults.standard.bool(forKey: "kimi.enabled") { refreshKimi() }\n', '', 1),
  ('  for provider in APIProvider.allCases where UserDefaults.standard.bool(forKey: "enabled.\\(provider.rawValue)") { refreshAPI(provider) }\n', '', 1),
  ('FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/UsageEdge/ClaudeStatus/snapshot.json")', 'URL(fileURLWithPath: ProcessInfo.processInfo.environment["USAGEEDGE_FAKE_SNAPSHOT"]!)', 1),
- ('UserDefaults.standard', 'UserDefaults(suiteName: ProcessInfo.processInfo.environment["USAGEEDGE_TEST_DEFAULTS"]!)!', 11),
+ ('UserDefaults.standard', 'UserDefaults(suiteName: ProcessInfo.processInfo.environment["USAGEEDGE_TEST_DEFAULTS"]!)!', 13),
  (original_paths, '[' + json.dumps(fake, ensure_ascii=False) + ']', 2),
  ('NSWorkspace.shared.open(start.url)', 'testOpen(start.url)', 1),
  ('scheduleResets("Codex", windows: result); ', '', 1),
- ('scheduleResets("Claude", windows: []); ', '', 2),
+ ('scheduleResets("Claude", windows: []); ', '', 3),
  ('scheduleResets("Claude", windows: snapshot.windows); ', '', 1),
 ]
 for before, after, expected in changes:

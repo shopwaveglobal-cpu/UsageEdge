@@ -166,6 +166,9 @@ final class UsageModel: ObservableObject {
   guard let data = try? Data(contentsOf: url), let snapshot = ClaudeStatusParser.parse(data), !snapshot.windows.isEmpty else {
    claudeWindows = []; claudeStatus = "설정에서 연결"; scheduleResets("Claude", windows: []); return
   }
+  guard snapshot.capturedAt.timeIntervalSince1970 >= UserDefaults.standard.double(forKey: "claude.minimumCapture") else {
+   claudeWindows = []; claudeStatus = "새 사용량 대기 중"; scheduleResets("Claude", windows: []); resize?(); return
+  }
   claudeWindows = snapshot.windows
   claudeStatus = Date().timeIntervalSince(snapshot.capturedAt) > 900 ? "오래된 값" : snapshot.capturedAt.formatted(date: .omitted, time: .shortened) + " 기준"
   scheduleResets("Claude", windows: snapshot.windows); resize?()
@@ -224,7 +227,10 @@ final class UsageModel: ObservableObject {
     let success = process.terminationStatus == 0
     DispatchQueue.main.async {
      self.claudeSetupStatus = success ? (disconnect ? "연결 해제됨 · Claude Code 재시작 필요" : "연결됨 · Claude Code 사용 후 갱신") : "설정 실패 · 기존 상태줄과 권한 확인"
-     if success { UserDefaults.standard.set(disconnect, forKey: "claude.disconnected") }
+     if success {
+      if !disconnect { UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "claude.minimumCapture") }
+      UserDefaults.standard.set(disconnect, forKey: "claude.disconnected")
+     }
      self.refreshClaudeStatus()
     }
    } catch { DispatchQueue.main.async { self.claudeSetupStatus = "연결 도구 실행 실패" } }

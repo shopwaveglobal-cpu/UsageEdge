@@ -15,6 +15,10 @@ precondition(claude.claudeWindows.isEmpty && claude.claudeStatus == "연결 해�
 let restarted = UsageModel(); restarted.refreshClaudeStatus()
 precondition(restarted.claudeWindows.isEmpty && restarted.claudeStatus == "연결 해제됨", "disconnect should survive restart")
 defaults.set(false, forKey: "claude.disconnected")
+defaults.set(Date().timeIntervalSince1970 + 5, forKey: "claude.minimumCapture")
+claude.refreshClaudeStatus()
+precondition(claude.claudeWindows.isEmpty && claude.claudeStatus == "새 사용량 대기 중", "reconnection must not show an old snapshot")
+defaults.removeObject(forKey: "claude.minimumCapture")
 let snapshotURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["USAGEEDGE_FAKE_SNAPSHOT"]!)
 var snapshot = try! JSONSerialization.jsonObject(with: Data(contentsOf: snapshotURL)) as! [String: Any]
 snapshot["captured_at"] = Date().timeIntervalSince1970 - 901
