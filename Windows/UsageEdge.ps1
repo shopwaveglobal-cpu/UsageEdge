@@ -124,8 +124,13 @@ $timer.Add_Tick({
     $row=$rows[$i]; if($i -lt $script:windows.Count){$w=$script:windows[$i]; $row.Title.Text=$w.Label; $row.Value.Text="$($w.Remaining)% 남음"; $row.Bar.Value=[int]$w.Remaining; $row.Date.Text=if($w.Reset){'초기화 '+$w.Reset.ToString('M월 d일 HH:mm')}else{'초기화 시간 확인 불가'}}
     else{$row.Title.Text='';$row.Value.Text='';$row.Bar.Value=0;$row.Date.Text=''}
    }
-  } else { $script:windows=@(); $status.Text=if($result.error){$result.error}else{'확인 불가'}; foreach($row in $rows){$row.Title.Text='';$row.Value.Text='';$row.Bar.Value=0;$row.Date.Text=''} }
-  $compactInfo.Text=Get-CompactSummary $script:windows
+  } else {
+   $state=Resolve-RefreshState $script:windows $result
+   $script:windows=@($state.Windows)
+   $reason=if($result.error){$result.error}else{'확인 불가'}
+   $status.Text=if($state.Stale){'오래된 값 · '+$reason}else{$reason}
+  }
+  $compactInfo.Text=if($result -and $result.windows){Get-CompactSummary $script:windows}else{Get-CompactSummary @()}
  }
  if($script:loginRefreshPending -and -not $script:job){$script:loginRefreshPending=$false; Start-Refresh}
  if(((Get-Date)-$script:lastRefresh).TotalSeconds -ge 300){Start-Refresh}

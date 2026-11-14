@@ -23,3 +23,10 @@ function Get-CompactSummary($windows) {
     $weekText = if ($week.Count) { "$($week[0].Remaining)%" } else { '—' }
     return "5H $fiveText  |  주 $weekText"
 }
+
+function Resolve-RefreshState($previous, $result) {
+    if ($result -and $result.windows -and @($result.windows).Count -gt 0) {
+        return @{ Windows = @($result.windows); Stale = $false }
+    }
+    return @{ Windows = @($previous); Stale = (@($previous).Count -gt 0) }
+}
