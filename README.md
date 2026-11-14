@@ -75,3 +75,7 @@ Anthropic의 현재 [인증 정책](https://code.claude.com/docs/en/legal-and-co
 ## 자동 검증
 
 `.github/workflows/verify.yml`은 macOS 빌드·모의 통합 검사와 Windows PowerShell 구문·사용량 계산 검사를 실행하도록 설정되어 있습니다. 워크플로가 GitHub에서 실제 실행되기 전까지는 Windows 실행 성공 근거가 아닙니다. 로컬 HTTP 통합 검사는 루프백 포트 사용 권한이 필요합니다. GUI·실계정·재부팅 검사는 별도입니다.
+
+## Gemini CLI
+
+Gemini CLI의 자동 조회는 아직 지원하지 않습니다. CLI에서 `/stats model`을 실행하면 지원되는 모델의 사용량과 한도를 확인할 수 있습니다. 이 값은 Gemini 웹 구독의 잔여량과 구분해야 합니다. [Gemini CLI 공식 안내](https://github.com/google-gemini/gemini-cli/blob/main/docs/get-started/index.md#check-usage-and-quota)

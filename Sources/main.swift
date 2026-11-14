@@ -419,8 +419,12 @@ struct SettingsView: View {
    GroupBox("Codex") {
     HStack { Text(model.status).font(.caption); Spacer(); Button("브라우저 연결") { model.connectCodex() }.disabled(model.loginInProgress) }.padding(4)
    }
-   GroupBox("Gemini") {
-    HStack { Text("자동 사용량 조회 준비 중").font(.caption); Spacer(); Button("공식 사용량 열기") { if let url = URL(string: "https://gemini.google.com/usage") { NSWorkspace.shared.open(url) } } }.padding(4)
+   GroupBox("Gemini CLI") {
+    VStack(alignment: .leading, spacing: 6) {
+     Text("자동 조회 준비 중 · Gemini 웹 구독과 별도").font(.caption)
+     Text("Gemini CLI에서 /stats model을 실행하면 지원 모델의 사용량과 한도를 확인할 수 있습니다.").font(.caption)
+     Button("명령어 복사") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString("/stats model", forType: .string) }
+    }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
    }
    GroupBox("Kimi Code") {
     VStack(alignment: .leading) {
