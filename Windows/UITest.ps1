@@ -4,6 +4,11 @@ $quotaFile = (Join-Path $PSScriptRoot 'Quota.ps1').Replace("'", "''")
 $source = $source.Replace(". (Join-Path `$PSScriptRoot 'Quota.ps1')", ". '$quotaFile'")
 $rootEscaped = $PSScriptRoot.Replace("'", "''")
 $source = $source.Replace('$script:appRoot = $PSScriptRoot', "`$script:appRoot = '$rootEscaped'")
+$testKey = 'HKCU:\Software\UsageEdgeTest-' + [Guid]::NewGuid().ToString('N')
+$source = $source.Replace("`$script:kimiKey='HKCU:\Software\UsageEdge'", "`$script:kimiKey='$testKey'")
+if ($env:USAGEEDGE_TEST_KIMI_PORT) {
+ $source = [regex]::Replace($source, '(?m)^ \$chosen=\[Microsoft\.VisualBasic\.Interaction\]::InputBox.*$', ' $chosen=$env:USAGEEDGE_TEST_KIMI_PORT')
+}
 if ($env:USAGEEDGE_TEST_KIMI_TOKEN) {
  $source = $source.Replace("`$tokenPath=Join-Path ([Environment]::GetFolderPath('UserProfile')) '.kimi-code\server.token'", '$tokenPath=$env:USAGEEDGE_TEST_KIMI_TOKEN')
 }
@@ -33,7 +38,8 @@ try {
  if ($script:windows.Count -ne 2 -or $script:windows[0].Remaining -ne 75 -or $script:windows[1].Remaining -ne 20) { throw "Fake Codex refresh failed: $($status.Text)" }
  if ($compactInfo.Text -ne (Get-CompactSummary $script:windows)) { throw 'Compact values did not update' }
  if ($env:USAGEEDGE_TEST_KIMI_PORT) {
-  $script:kimiPort=[int]$env:USAGEEDGE_TEST_KIMI_PORT; Update-KimiLayout; Start-KimiRefresh -Force
+  $kimiConnect.PerformClick()
+  if ($script:kimiPort -ne [int]$env:USAGEEDGE_TEST_KIMI_PORT -or (Get-ItemProperty -LiteralPath $script:kimiKey -Name KimiPort).KimiPort -ne $script:kimiPort) { throw 'Kimi connection settings not persisted' }
   $deadline=[DateTime]::UtcNow.AddSeconds(30)
   while ([DateTime]::UtcNow -lt $deadline -and ($script:kimiJob -or $script:kimiWindows.Count -eq 0)) {
    [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 50
@@ -41,10 +47,13 @@ try {
   if ($script:kimiWindows.Count -ne 2 -or $script:kimiWindows[0].Remaining -ne 75 -or $script:kimiWindows[1].Remaining -ne 20) { throw "Fake Kimi refresh failed: $($kimiLabel.Text)" }
   $collapse.PerformClick(); [System.Windows.Forms.Application]::DoEvents()
   if (-not $compactKimi.Visible -or $compactKimi.Text -notmatch '75%') { throw 'Compact Kimi values missing' }
+  $kimiDisconnect.PerformClick(); [System.Windows.Forms.Application]::DoEvents()
+  if ($script:kimiPort -ne 0 -or $script:kimiWindows.Count -ne 0 -or $compactKimi.Visible) { throw 'Kimi disconnect failed' }
+  if ($null -ne (Get-ItemProperty -LiteralPath $script:kimiKey -Name KimiPort -ErrorAction SilentlyContinue)) { throw 'Kimi port remained after disconnect' }
   Write-Output 'Windows Kimi widget checks passed'
  }
  Write-Output 'Windows form and fake Codex refresh checks passed'
-} finally { $form.Close(); $form.Dispose(); $env:PATH = $oldPath; Remove-Item -LiteralPath $fakeDir -Recurse -Force -ErrorAction SilentlyContinue }
+} finally { $form.Close(); $form.Dispose(); $env:PATH = $oldPath; Remove-Item -LiteralPath $testKey -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $fakeDir -Recurse -Force -ErrorAction SilentlyContinue }
 '@
 $source = $source.Replace($entry, $checks)
 & ([scriptblock]::Create($source))

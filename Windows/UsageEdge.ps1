@@ -80,10 +80,14 @@ $kimiConnect.Add_Click({
  if (-not [int]::TryParse($chosen,[ref]$number) -or $number -lt 1 -or $number -gt 65535) { [System.Windows.Forms.MessageBox]::Show('포트를 확인하세요.') | Out-Null; return }
  try { New-Item -Path $script:kimiKey -Force | Out-Null; Set-ItemProperty -LiteralPath $script:kimiKey -Name KimiPort -Value $number -Type DWord -ErrorAction Stop }
  catch { [System.Windows.Forms.MessageBox]::Show('설정을 저장하지 못했습니다.') | Out-Null; return }
- $script:kimiPort=$number; $script:kimiWindows=@(); $kimiLabel.Text='Kimi Code 확인 중'; Update-KimiLayout; Start-KimiRefresh -Force
+ if ($script:kimiJob) { Stop-Job $script:kimiJob -ErrorAction SilentlyContinue; Remove-Job $script:kimiJob -Force -ErrorAction SilentlyContinue; $script:kimiJob=$null }
+ $script:kimiPort=$number; $script:kimiWindows=@(); $script:kimiNotified=@{}; $kimiLabel.Text='Kimi Code 확인 중'; Update-KimiLayout; Start-KimiRefresh -Force
 })
 $kimiDisconnect.Add_Click({
- try { Remove-ItemProperty -LiteralPath $script:kimiKey -Name KimiPort -ErrorAction SilentlyContinue } catch {}
+ try {
+  $existing=Get-ItemProperty -LiteralPath $script:kimiKey -Name KimiPort -ErrorAction SilentlyContinue
+  if ($null -ne $existing) { Remove-ItemProperty -LiteralPath $script:kimiKey -Name KimiPort -ErrorAction Stop }
+ } catch { [System.Windows.Forms.MessageBox]::Show('연결 해제 설정을 저장하지 못했습니다.') | Out-Null; return }
  $script:kimiPort=0; $script:kimiWindows=@()
  if ($script:kimiJob) { Stop-Job $script:kimiJob -ErrorAction SilentlyContinue; Remove-Job $script:kimiJob -Force -ErrorAction SilentlyContinue; $script:kimiJob=$null }
  Update-KimiLayout
