@@ -5,6 +5,12 @@ import Foundation
   let json = #"{"id":2,"result":{"rateLimits":{"primary":{"usedPercent":25,"windowDurationMins":300,"resetsAt":2000000000},"secondary":{"usedPercent":80,"windowDurationMins":10080,"resetsAt":2000001000}}}}"#.data(using: .utf8)!
   let windows = QuotaParser.parse(json)
   precondition(windows.count == 2 && windows[0].remaining == 75 && windows[1].remaining == 20)
+  let kimiAPI = Data(#"{"code":0,"data":{"kind":"ok","quota":{"usages":{"limit5h":{"usedRatio":0.25,"resetAt":"2026-11-14T12:00:00Z"},"limit7d":{"usedRatio":0.8}}}}}"#.utf8)
+  let kimiWindows = KimiServerQuota.parse(kimiAPI)
+  precondition(kimiWindows.map(\.remaining) == [75, 20] && kimiWindows.first?.reset != nil)
+  precondition(KimiServerQuota.parse(Data(#"{"code":0,"data":{"kind":"error","quota":{"usages":{"limit5h":{"usedRatio":0}}}}}"#.utf8)).isEmpty)
+  precondition(KimiServerQuota.parse(Data(#"{"code":1,"data":{"kind":"ok","quota":{"usages":{"limit5h":{"usedRatio":0}}}}}"#.utf8)).isEmpty)
+  precondition(KimiServerQuota.parse(Data(#"{"code":0,"data":{"kind":"ok","quota":{"usages":{"limit5h":{"usedRatio":true}}}}}"#.utf8)).isEmpty)
   let reference = Date(timeIntervalSince1970: 2_000_000_000)
   precondition(QuotaWindow(remaining: 50, minutes: 300, reset: reference.addingTimeInterval(61)).resetLabel(now: reference) == "2분 후 초기화 예정")
   precondition(QuotaWindow(remaining: 50, minutes: 300, reset: reference.addingTimeInterval(-1)).resetLabel(now: reference) == "초기화 확인 중")

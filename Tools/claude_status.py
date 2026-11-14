@@ -32,7 +32,11 @@ def extract(data):
 def main():
     try:
         data = json.loads(sys.stdin.read(1_000_001))
-        snapshot = {'captured_at': time.time(), 'rate_limits': extract(data)}
+        limits = extract(data)
+        if not limits:
+            print('Claude')
+            return
+        snapshot = {'captured_at': time.time(), 'rate_limits': limits}
         directory = Path.home() / 'Library' / 'Application Support' / 'UsageEdge' / 'ClaudeStatus'
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(directory, 0o700)

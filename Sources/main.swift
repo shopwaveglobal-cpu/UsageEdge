@@ -8,12 +8,20 @@ final class UsageModel: ObservableObject {
  @Published var windows: [QuotaWindow] = []
  @Published var status = "확인 중"
  @Published var claudeWindows: [QuotaWindow] = []
- @Published var claudeStatus = "공식 화면에서 확인"
+ @Published var claudeStatus = "설정에서 연결"
  @Published var notificationStatus = ""
+ @Published var claudeSetupStatus = "Claude Code 연결 전"
+ @Published var apiStatuses: [String: String] = [:]
+ @Published var kimiWindows: [QuotaWindow] = []
+ @Published var kimiStatus = "연결 전"
+ private var kimiVersion = 0
+ private let providerAccess = ProviderAccess()
+ private var apiVersions: [String: Int] = [:]
  @Published var loginInProgress = false
  var loginProcess: Process?
  var loginAttempt = LoginAttempt()
  var resize: (() -> Void)?
+ var openSettings: (() -> Void)?
  @Published var updated: Date?
  @Published var expanded = true
  @Published var loginEnabled = SMAppService.mainApp.status == .enabled
@@ -106,11 +114,17 @@ final class UsageModel: ObservableObject {
   busy = false
   if loginInProgress { return }
   if refreshPending { refreshPending = false; refresh(); return }
+  guard !result.isEmpty else {
+   self.status = windows.isEmpty ? status : "오래된 값 · " + status
+   resize?(); return
+  }
   windows = result; scheduleResets("Codex", windows: result); self.status = status
-  updated = result.isEmpty ? nil : Date(); resize?()
+  updated = Date(); resize?()
  }
  func refresh() {
   refreshClaudeStatus()
+  if UserDefaults.standard.bool(forKey: "kimi.enabled") { refreshKimi() }
+  for provider in APIProvider.allCases where UserDefaults.standard.bool(forKey: "enabled.\(provider.rawValue)") { refreshAPI(provider) }
   guard !busy, !loginInProgress else { return }; busy = true; status = "확인 중"
 
   DispatchQueue.global(qos: .utility).async {
@@ -145,9 +159,12 @@ final class UsageModel: ObservableObject {
   }
  }
  func refreshClaudeStatus() {
+  if UserDefaults.standard.bool(forKey: "claude.disconnected") {
+   claudeWindows = []; claudeStatus = "연결 해제됨"; scheduleResets("Claude", windows: []); resize?(); return
+  }
   let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/UsageEdge/ClaudeStatus/snapshot.json")
   guard let data = try? Data(contentsOf: url), let snapshot = ClaudeStatusParser.parse(data), !snapshot.windows.isEmpty else {
-   claudeWindows = []; claudeStatus = "공식 화면에서 확인"; scheduleResets("Claude", windows: []); return
+   claudeWindows = []; claudeStatus = "설정에서 연결"; scheduleResets("Claude", windows: []); return
   }
   claudeWindows = snapshot.windows
   claudeStatus = Date().timeIntervalSince(snapshot.capturedAt) > 900 ? "오래된 값" : snapshot.capturedAt.formatted(date: .omitted, time: .shortened) + " 기준"
@@ -194,6 +211,79 @@ final class UsageModel: ObservableObject {
  func connectClaude() {
   if let url = URL(string: "https://claude.ai/settings/usage") { NSWorkspace.shared.open(url) }
  }
+ func setupClaude(disconnect: Bool = false) {
+  guard let script = Bundle.main.url(forResource: "setup_claude", withExtension: "py") else {
+   claudeSetupStatus = "연결 도구를 찾을 수 없습니다"; return
+  }
+  claudeSetupStatus = "연결 설정 중"
+  DispatchQueue.global(qos: .utility).async {
+   let process = Process(); process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+   process.arguments = [script.path, disconnect ? "--uninstall" : "--install"]; process.standardOutput = FileHandle.nullDevice; process.standardError = FileHandle.nullDevice
+   do {
+    try process.run(); process.waitUntilExit()
+    let success = process.terminationStatus == 0
+    DispatchQueue.main.async {
+     self.claudeSetupStatus = success ? (disconnect ? "연결 해제됨 · Claude Code 재시작 필요" : "연결됨 · Claude Code 사용 후 갱신") : "설정 실패 · 기존 상태줄과 권한 확인"
+     if success { UserDefaults.standard.set(disconnect, forKey: "claude.disconnected") }
+     self.refreshClaudeStatus()
+    }
+   } catch { DispatchQueue.main.async { self.claudeSetupStatus = "연결 도구 실행 실패" } }
+  }
+ }
+ func connectKimi(port: String, token: String) {
+  guard let number = Int(port), KimiLocalRequest.make(port: number, token: token) != nil else { kimiStatus = "포트와 토큰 확인 필요"; return }
+  guard providerAccess.save(token, account: "KimiCodeLocal") else { kimiStatus = "키체인 저장 실패"; return }
+  UserDefaults.standard.set(number, forKey: "kimi.port")
+  UserDefaults.standard.set(true, forKey: "kimi.enabled")
+  refreshKimi()
+ }
+ func disconnectKimi() {
+  guard providerAccess.remove(account: "KimiCodeLocal") else { kimiStatus = "키체인 삭제 실패"; return }
+  UserDefaults.standard.set(false, forKey: "kimi.enabled"); kimiVersion += 1
+  kimiWindows = []; kimiStatus = "연결 해제됨"; scheduleResets("Kimi", windows: []); resize?()
+ }
+ func refreshKimi() {
+  kimiVersion += 1; let version = kimiVersion
+  guard let token = providerAccess.key(account: "KimiCodeLocal"),
+        let request = KimiLocalRequest.make(port: UserDefaults.standard.integer(forKey: "kimi.port"), token: token) else { kimiStatus = "연결 설정 확인 필요"; return }
+  kimiStatus = "확인 중"
+  providerAccess.fetchKimi(request) { code, data in
+   let result = (code == 200 && (data?.count ?? 0) <= 1_000_000) ? data.map(KimiServerQuota.parse) ?? [] : []
+   DispatchQueue.main.async {
+    guard self.kimiVersion == version else { return }
+    guard !result.isEmpty else {
+     let reason = code == 401 ? "서버 토큰 확인 필요" : "조회 불가 · 서버와 로그인 확인"
+     self.kimiStatus = self.kimiWindows.isEmpty ? reason : "오래된 값 · " + reason
+     return
+    }
+    self.kimiWindows = result; self.kimiStatus = "연결됨"; self.scheduleResets("Kimi", windows: result); self.resize?()
+   }
+  }
+ }
+ func saveAPI(_ provider: APIProvider, key: String) {
+  let cleaned = key.trimmingCharacters(in: .whitespacesAndNewlines)
+  guard !cleaned.isEmpty, !cleaned.contains(where: { $0.isWhitespace || $0.isNewline }) else { apiStatuses[provider.rawValue] = "API 키를 확인하세요"; return }
+  guard providerAccess.save(cleaned, for: provider) else { apiStatuses[provider.rawValue] = "키체인 저장 실패"; return }
+  UserDefaults.standard.set(true, forKey: "enabled.\(provider.rawValue)")
+  refreshAPI(provider)
+ }
+ func disconnectAPI(_ provider: APIProvider) {
+  guard providerAccess.remove(provider) else { apiStatuses[provider.rawValue] = "키체인 삭제 실패"; return }
+  UserDefaults.standard.removeObject(forKey: "enabled.\(provider.rawValue)")
+  apiVersions[provider.rawValue, default: 0] += 1; apiStatuses.removeValue(forKey: provider.rawValue); resize?()
+ }
+ func refreshAPI(_ provider: APIProvider) {
+  apiVersions[provider.rawValue, default: 0] += 1
+  let version = apiVersions[provider.rawValue]!
+  guard let key = providerAccess.key(provider) else { apiStatuses[provider.rawValue] = "키체인 연결 확인 필요"; return }
+  apiStatuses[provider.rawValue] = "조회 중"
+  providerAccess.fetch(provider, key: key) { result in
+   DispatchQueue.main.async {
+    guard self.apiVersions[provider.rawValue] == version else { return }
+    self.apiStatuses[provider.rawValue] = result; self.resize?()
+   }
+  }
+ }
 
 }
 
@@ -214,6 +304,15 @@ struct WidgetView: View {
     VStack(spacing: 6) {
      quotaProvider("Claude", color: claude, status: model.claudeStatus, windows: model.claudeWindows)
      quotaProvider("Codex", color: codex, status: model.status, windows: model.windows)
+     if !model.kimiWindows.isEmpty { quotaProvider("Kimi Code", color: .orange, status: model.kimiStatus, windows: model.kimiWindows) }
+     ForEach(APIProvider.allCases) { provider in
+      if let value = model.apiStatuses[provider.rawValue] {
+       VStack(alignment: .leading, spacing: 4) {
+        Text(provider.rawValue).font(.system(size: 11, weight: .semibold))
+        Text(value).font(.system(size: 9)).foregroundStyle(.white.opacity(0.7))
+       }.frame(maxWidth: .infinity, alignment: .leading).padding(8).background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
+      }
+     }
     }.padding(.horizontal, 7)
     HStack {
      Text(model.notificationStatus.isEmpty ? (model.updated.map { "갱신 " + $0.formatted(date: .omitted, time: .shortened) } ?? "갱신 대기 중") : model.notificationStatus)
@@ -229,9 +328,10 @@ struct WidgetView: View {
        Text("5H").frame(width: 25)
        Text("주").frame(width: 25)
       }.font(.system(size: 8, weight: .medium)).foregroundStyle(.white.opacity(0.45))
-      compactRow("C", color: claude, windows: model.claudeWindows)
-      compactRow("D", color: codex, windows: model.windows)
-     }.padding(.horizontal, 7).frame(width: 80, height: 64)
+      compactRow("Claude", symbol: "C", color: claude, status: model.claudeStatus, windows: model.claudeWindows)
+      compactRow("Codex", symbol: "D", color: codex, status: model.status, windows: model.windows)
+      if !model.kimiWindows.isEmpty { compactRow("Kimi Code", symbol: "K", color: .orange, status: model.kimiStatus, windows: model.kimiWindows) }
+     }.padding(.horizontal, 7).frame(width: 80, height: model.kimiWindows.isEmpty ? 64 : 80)
     }.buttonStyle(.plain).help("펼치기")
    }
   }
@@ -240,16 +340,16 @@ struct WidgetView: View {
   .clipShape(RoundedRectangle(cornerRadius: 16))
   .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.09)))
  }
- func compactRow(_ name: String, color: Color, windows: [QuotaWindow]) -> some View {
+ func compactRow(_ name: String, symbol: String, color: Color, status: String, windows: [QuotaWindow]) -> some View {
   HStack(spacing: 0) {
-   Text(name).font(.system(size: 9, weight: .bold)).foregroundStyle(color)
+   Text(symbol).font(.system(size: 9, weight: .bold)).foregroundStyle(color)
    Spacer(minLength: 0)
    ForEach([300, 10080], id: \.self) { minutes in
-    Text(windows.first(where: { $0.minutes == minutes }).map { "\($0.remaining)%" } ?? "—")
+    Text(status.contains("오래된 값") ? "—" : (windows.first(where: { $0.minutes == minutes }).map { "\($0.remaining)%" } ?? "—"))
      .font(.system(size: 9, weight: .medium, design: .rounded)).monospacedDigit()
      .foregroundStyle(.white.opacity(0.85)).frame(width: 25)
    }
-  }.accessibilityLabel("\(name == "C" ? "Claude" : "Codex") 잔여량: 5시간 \(windows.first(where: { $0.minutes == 300 }).map { "\($0.remaining)%" } ?? "확인 불가"), 주간 \(windows.first(where: { $0.minutes == 10080 }).map { "\($0.remaining)%" } ?? "확인 불가")")
+  }.accessibilityLabel("\(name) 잔여량 (\(status)): 5시간 \(windows.first(where: { $0.minutes == 300 }).map { "\($0.remaining)%" } ?? "확인 불가"), 주간 \(windows.first(where: { $0.minutes == 10080 }).map { "\($0.remaining)%" } ?? "확인 불가")")
  }
  func quotaProvider(_ name: String, color: Color, status: String, windows: [QuotaWindow]) -> some View {
   VStack(alignment: .leading, spacing: 6) {
@@ -284,6 +384,7 @@ struct WidgetView: View {
  }
  var settings: some View {
   Menu {
+   Button("서비스 설정…") { model.openSettings?() }
    Button("지금 새로고침") { model.refresh() }
    Button("Codex 브라우저 연결…") { model.connectCodex() }.disabled(model.loginInProgress)
    if model.loginInProgress { Button("Codex 연결 취소") { model.cancelCodexLogin() } }
@@ -299,10 +400,62 @@ struct WidgetView: View {
  }
 }
 
+struct SettingsView: View {
+ @ObservedObject var model: UsageModel
+ @State private var openRouterKey = ""
+ @State private var deepSeekKey = ""
+ @State private var kimiPort = "58627"
+ @State private var kimiToken = ""
+ var body: some View {
+  ScrollView { VStack(alignment: .leading, spacing: 16) {
+   Text("서비스 설정").font(.title2.bold())
+   GroupBox("Claude Code") {
+    VStack(alignment: .leading, spacing: 8) {
+     Text(model.claudeSetupStatus).font(.caption)
+     Text("Claude Code 사용 중 받은 사용량을 표시합니다. 기존 상태줄이 있으면 변경하지 않습니다.").font(.caption).foregroundStyle(.secondary)
+     HStack { Button("Claude Code 연결") { model.setupClaude() }; Button("연결 해제") { model.setupClaude(disconnect: true) }; Button("공식 사용량 열기") { model.connectClaude() } }
+    }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
+   }
+   GroupBox("Codex") {
+    HStack { Text(model.status).font(.caption); Spacer(); Button("브라우저 연결") { model.connectCodex() }.disabled(model.loginInProgress) }.padding(4)
+   }
+   GroupBox("Gemini") {
+    HStack { Text("자동 사용량 조회 준비 중").font(.caption); Spacer(); Button("공식 사용량 열기") { if let url = URL(string: "https://gemini.google.com/usage") { NSWorkspace.shared.open(url) } } }.padding(4)
+   }
+   GroupBox("Kimi Code") {
+    VStack(alignment: .leading) {
+     Text(model.kimiStatus).font(.caption)
+     Text("로그인된 Kimi Code 로컬 서버의 포트와 서버 토큰을 입력하세요. 토큰은 해당 서버의 파일 및 명령 기능에도 접근할 수 있습니다.").font(.caption)
+     TextField("포트", text: $kimiPort)
+     SecureField("로컬 서버 토큰", text: $kimiToken)
+     HStack { Button("연결") { let token = kimiToken; kimiToken = ""; model.connectKimi(port: kimiPort, token: token) }; Button("연결 해제") { model.disconnectKimi() } }
+    }.padding(4)
+   }
+   apiSettings(.openRouter, key: $openRouterKey)
+   apiSettings(.deepSeek, key: $deepSeekKey)
+   Spacer()
+  }.padding(20) }.frame(width: 450, height: 440)
+ }
+ func apiSettings(_ provider: APIProvider, key: Binding<String>) -> some View {
+  GroupBox(provider.rawValue + " API") {
+   VStack(alignment: .leading, spacing: 6) {
+    Text(model.apiStatuses[provider.rawValue] ?? "연결 전").font(.caption)
+    SecureField("API 키", text: key)
+    HStack {
+     Button("키 저장 및 조회") { let value = key.wrappedValue; key.wrappedValue = ""; model.saveAPI(provider, key: value) }
+     Button("키 삭제") { model.disconnectAPI(provider) }
+    }
+    Text("키는 이 Mac의 키체인에 저장되며 해당 서비스에만 전송됩니다.").font(.caption2).foregroundStyle(.secondary)
+   }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
+  }
+ }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
  func applicationWillTerminate(_ notification: Notification) { model?.cancelCodexLogin() }
  func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) { completionHandler([.banner, .sound]) }
  var panel: NSPanel!; var model: UsageModel!; var status: NSStatusItem!
+ var settingsWindow: NSWindow?
  func applicationDidFinishLaunching(_ notification: Notification) {
   NSApp.setActivationPolicy(.accessory)
   UNUserNotificationCenter.current().delegate = self
@@ -314,10 +467,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
   panel.contentView = NSHostingView(rootView: WidgetView(model: model, resize: { [weak self] in self?.position() }))
   status = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength); status.button?.title = "◔"; status.button?.target = self; status.button?.action = #selector(toggle)
   model.resize = { [weak self] in self?.position() }
+  model.openSettings = { [weak self] in self?.showSettings() }
   position(); panel.orderFrontRegardless()
   NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in self?.position() }
  }
  @objc func toggle() { if panel.isVisible { panel.orderOut(nil) } else { position(); panel.orderFrontRegardless() } }
+ func showSettings() {
+  if settingsWindow == nil {
+   let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 450, height: 440), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+   window.title = "UsageEdge 설정"; window.isReleasedWhenClosed = false
+   window.contentView = NSHostingView(rootView: SettingsView(model: model)); window.center(); settingsWindow = window
+  }
+  settingsWindow?.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)
+ }
  func position() {
   guard let screen = NSScreen.main else { return }
   let size = panel.contentView?.fittingSize ?? NSSize(width: 258, height: 240)

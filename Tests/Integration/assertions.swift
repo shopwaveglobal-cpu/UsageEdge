@@ -4,9 +4,17 @@ func waitFor(_ predicate: () -> Bool) -> Bool {
  while Date() < deadline { if predicate() { return true }; RunLoop.current.run(until: Date().addingTimeInterval(0.02)) }
  return predicate()
 }
+let defaults = UserDefaults(suiteName: ProcessInfo.processInfo.environment["USAGEEDGE_TEST_DEFAULTS"]!)!
+defaults.removePersistentDomain(forName: ProcessInfo.processInfo.environment["USAGEEDGE_TEST_DEFAULTS"]!)
 let claude = UsageModel(); claude.refreshClaudeStatus()
 precondition(claude.claudeWindows.map(\.remaining) == [75, 20], "Claude status capture did not reach the widget model")
 precondition(claude.claudeStatus.hasSuffix("기준"), "Claude snapshot time is missing: \(claude.claudeStatus)")
+defaults.set(true, forKey: "claude.disconnected")
+claude.refreshClaudeStatus()
+precondition(claude.claudeWindows.isEmpty && claude.claudeStatus == "연결 해제됨", "disconnect should clear quota")
+let restarted = UsageModel(); restarted.refreshClaudeStatus()
+precondition(restarted.claudeWindows.isEmpty && restarted.claudeStatus == "연결 해제됨", "disconnect should survive restart")
+defaults.set(false, forKey: "claude.disconnected")
 let snapshotURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["USAGEEDGE_FAKE_SNAPSHOT"]!)
 var snapshot = try! JSONSerialization.jsonObject(with: Data(contentsOf: snapshotURL)) as! [String: Any]
 snapshot["captured_at"] = Date().timeIntervalSince1970 - 901
@@ -17,6 +25,12 @@ snapshot["captured_at"] = Date().timeIntervalSince1970 - 86401
 try! JSONSerialization.data(withJSONObject: snapshot).write(to: snapshotURL)
 claude.refreshClaudeStatus()
 precondition(claude.claudeWindows.isEmpty, "expired Claude data remained visible")
+let stale = UsageModel()
+stale.completeRefresh([QuotaWindow(remaining: 42, minutes: 300, reset: Date().addingTimeInterval(3600))], status: "연결됨")
+let lastUpdated = stale.updated
+stale.completeRefresh([], status: "실행 실패")
+precondition(stale.windows.first?.remaining == 42, "failed refresh erased the last known quota")
+precondition(stale.updated == lastUpdated && stale.status.contains("오래된 값"), "failed refresh must mark the observation stale")
 func scenario(_ mode: String, expected: String, shouldOpen: Bool) {
  setenv("USAGEEDGE_FAKE_MODE", mode, 1); testOpened.removeAll()
  let model = UsageModel(); model.connectCodex()

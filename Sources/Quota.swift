@@ -112,3 +112,19 @@ enum ProviderParser {
   return windows.sorted { ($0.minutes <= 0 ? Int.max : $0.minutes) < ($1.minutes <= 0 ? Int.max : $1.minutes) }
  }
 }
+
+// Kimi Code's local server API is experimental and can change between versions.
+enum KimiServerQuota {
+ static func parse(_ data: Data) -> [QuotaWindow] {
+  guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+        let code = root["code"] as? NSNumber, CFGetTypeID(code) != CFBooleanGetTypeID(), code.doubleValue == 0,
+        let body = root["data"] as? [String: Any], body["kind"] as? String == "ok",
+        let quota = body["quota"] as? [String: Any], let usages = quota["usages"] as? [String: Any] else { return [] }
+  return [("limit5h", 300), ("limit7d", 10080)].compactMap { key, minutes in
+   guard let item = usages[key] as? [String: Any], let ratio = item["usedRatio"] as? NSNumber,
+         CFGetTypeID(ratio) != CFBooleanGetTypeID(), ratio.doubleValue.isFinite,
+         (0...1).contains(ratio.doubleValue) else { return nil }
+   return QuotaWindow(remaining: Int(((1 - ratio.doubleValue) * 100).rounded()), minutes: minutes, reset: ProviderParser.date(item["resetAt"]))
+  }
+ }
+}

@@ -18,6 +18,17 @@ class StatusTests(unittest.TestCase):
     def test_invalid_or_absent_values_are_not_invented(self):
         self.assertEqual(mod.extract({'rate_limits': {'five_hour': {'used_percentage': True}, 'seven_day': {'used_percentage': 101}}}), {})
         self.assertEqual(mod.extract({}), {})
+    def test_missing_limits_preserve_previous_observation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(mod.Path, 'home', return_value=pathlib.Path(tmp)), patch('sys.stdout', io.StringIO()):
+                with patch('sys.stdin', io.StringIO(json.dumps({'rate_limits': {'five_hour': {'used_percentage': 20}}}))):
+                    mod.main()
+                file = pathlib.Path(tmp) / 'Library/Application Support/UsageEdge/ClaudeStatus/snapshot.json'
+                original = file.read_bytes()
+                with patch('sys.stdin', io.StringIO('{}')):
+                    mod.main()
+                self.assertEqual(file.read_bytes(), original)
+
     def test_capture_saves_only_limits_with_private_permissions(self):
         with tempfile.TemporaryDirectory() as tmp:
             payload = {'session_id': 'private', 'rate_limits': {'five_hour': {'used_percentage': 20}}}
