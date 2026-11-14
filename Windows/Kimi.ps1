@@ -22,3 +22,13 @@
     } catch { return @{Error='network'} }
     finally { $request.Dispose(); $client.Dispose(); $handler.Dispose() }
 }
+
+function Get-KimiUsageFromFile([int]$Port, [string]$Path) {
+    try {
+        $file = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+        if ($file.PSIsContainer -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $file.Length -lt 1 -or $file.Length -gt 4096) { return @{Error='tokenfile'} }
+        $token = [IO.File]::ReadAllText($file.FullName).Trim()
+        if ([string]::IsNullOrEmpty($token) -or $token.Length -gt 4096 -or $token -cmatch '[^!-~]') { return @{Error='tokenfile'} }
+        return Get-KimiUsage $Port $token
+    } catch { return @{Error='tokenfile'} }
+}
