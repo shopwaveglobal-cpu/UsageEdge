@@ -11,7 +11,7 @@ $checks = @'
 $oldPath = $env:PATH
 $fakeDir = Join-Path ([IO.Path]::GetTempPath()) ('usageedge-fake-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $fakeDir | Out-Null
-$fake = @('@echo off', 'set /p line=', 'set /p line=', 'set /p line=', 'echo {"id":2,"result":{"rateLimits":{"primary":{"usedPercent":25,"windowDurationMins":300},"secondary":{"usedPercent":80,"windowDurationMins":10080}}}}') -join "`r`n"
+$fake = @('@echo off', 'echo {"id":2,"result":{"rateLimits":{"primary":{"usedPercent":25,"windowDurationMins":300},"secondary":{"usedPercent":80,"windowDurationMins":10080}}}}', 'ping 127.0.0.1 -n 3 >nul') -join "`r`n"
 [IO.File]::WriteAllText((Join-Path $fakeDir 'codex.cmd'), $fake, [Text.Encoding]::ASCII)
 $env:PATH = $fakeDir + [IO.Path]::PathSeparator + $oldPath
 try {
