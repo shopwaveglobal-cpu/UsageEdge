@@ -29,3 +29,6 @@ jobs:
           }
           $testName = -join ([char]0xAC80, [char]0xC0AC)
           & (Join-Path Windows ($testName + ".ps1"))
+      - name: Exercise Windows form
+        shell: powershell
+        run: powershell.exe -NoProfile -STA -File Windows/UITest.ps1
