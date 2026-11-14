@@ -30,3 +30,23 @@ function Resolve-RefreshState($previous, $result) {
     }
     return @{ Windows = @($previous); Stale = (@($previous).Count -gt 0) }
 }
+
+function Convert-KimiLimits($obj) {
+    if ($null -eq $obj -or $obj.code -is [bool] -or $obj.code -isnot [ValueType] -or $obj.code -ne 0 -or $obj.data.kind -ne 'ok') { return @() }
+    $usages = $obj.data.quota.usages
+    $result = @()
+    foreach ($entry in @(@{Name='limit5h'; Minutes=300; Label='5시간'}, @{Name='limit7d'; Minutes=10080; Label='주간'})) {
+        $item = $usages.($entry.Name)
+        if ($null -eq $item -or $item.usedRatio -is [bool] -or $item.usedRatio -isnot [ValueType]) { continue }
+        $ratio = [double]$item.usedRatio
+        if ([double]::IsNaN($ratio) -or [double]::IsInfinity($ratio) -or $ratio -lt 0 -or $ratio -gt 1) { continue }
+        $reset = $null
+        if ($item.resetAt -is [DateTime]) { $reset = $item.resetAt.ToLocalTime() }
+        elseif ($item.resetAt -is [string]) {
+            $parsed = [DateTimeOffset]::MinValue
+            if ([DateTimeOffset]::TryParse($item.resetAt, [ref]$parsed)) { $reset = $parsed.LocalDateTime }
+        }
+        $result += [pscustomobject]@{Minutes=$entry.Minutes; Label=$entry.Label; Remaining=[int][Math]::Round((1-$ratio)*100, [MidpointRounding]::AwayFromZero); Reset=$reset}
+    }
+    return $result
+}
