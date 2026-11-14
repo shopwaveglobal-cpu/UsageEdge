@@ -70,7 +70,7 @@ Anthropic의 현재 [인증 정책](https://code.claude.com/docs/en/legal-and-co
 
 ## Kimi Code 연동 개발 상태
 
-공식 [Kimi Code 로컬 서버 문서](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/reference/server-api-service.md)에 맞춘 5시간·7일 응답 파서와 모의 응답 검사를 추가했습니다. 설정에서 실행 중인 로컬 서버의 포트와 토큰을 입력하면 조회를 시도합니다. 토큰은 키체인에 저장하며 HTTP 리디렉션은 따르지 않습니다. 실제 서버·계정 연결과 화면은 아직 검증하지 않았습니다. 해당 서버 API는 베타이며 서버 토큰은 파일·명령 실행 등 다른 기능에도 접근할 수 있으므로 무인증 모드를 사용하거나 토큰을 공개하지 않아야 합니다.
+공식 [Kimi Code 로컬 서버 문서](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/reference/server-api-service.md)에 맞춘 5시간·7일 응답 파서와 모의 응답 검사를 추가했습니다. 설정에서 실행 중인 로컬 서버의 포트와 토큰을 입력하면 조회를 시도합니다. `로컬 토큰 불러오기`는 공식 경로 `~/.kimi-code/server.token`을 읽어 입력란에 채우며, 연결 버튼을 누르기 전에는 전송하지 않습니다. 포트는 실행 중인 Kimi 서버에서 확인하세요. 토큰은 키체인에 저장하며 HTTP 리디렉션은 따르지 않습니다. 실제 서버·계정 연결과 화면은 아직 검증하지 않았습니다. 해당 서버 API는 베타이며 서버 토큰은 파일·명령 실행 등 다른 기능에도 접근할 수 있으므로 무인증 모드를 사용하거나 토큰을 공개하지 않아야 합니다.
 
 ## 자동 검증
 

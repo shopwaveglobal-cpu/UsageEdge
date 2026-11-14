@@ -438,6 +438,12 @@ struct SettingsView: View {
      Text("로그인된 Kimi Code 로컬 서버의 포트와 서버 토큰을 입력하세요. 토큰은 해당 서버의 파일 및 명령 기능에도 접근할 수 있습니다.").font(.caption)
      TextField("포트", text: $kimiPort)
      SecureField("로컬 서버 토큰", text: $kimiToken)
+     Button("로컬 토큰 불러오기") {
+      let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".kimi-code/server.token")
+      if let token = KimiLocalRequest.readToken(from: url) { kimiToken = token; model.kimiStatus = "토큰 준비됨 · 포트 확인 후 연결" }
+      else { model.kimiStatus = "Kimi 서버 토큰 파일 확인 필요" }
+     }
+     Text("실행 중인 Kimi 서버의 포트인지 확인한 후 연결하세요.").font(.caption2).foregroundStyle(.secondary)
      HStack { Button("연결") { let token = kimiToken; kimiToken = ""; model.connectKimi(port: kimiPort, token: token) }; Button("연결 해제") { model.disconnectKimi() } }
     }.padding(4)
    }
