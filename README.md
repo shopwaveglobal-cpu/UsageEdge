@@ -79,3 +79,7 @@ Anthropic의 현재 [인증 정책](https://code.claude.com/docs/en/legal-and-co
 ## Gemini CLI
 
 Gemini CLI의 자동 조회는 아직 지원하지 않습니다. CLI에서 `/stats model`을 실행하면 지원되는 모델의 사용량과 한도를 확인할 수 있습니다. 이 값은 Gemini 웹 구독의 잔여량과 구분해야 합니다. [Gemini CLI 공식 안내](https://github.com/google-gemini/gemini-cli/blob/main/docs/get-started/index.md#check-usage-and-quota)
+
+## 시험 배포 파일 만들기
+
+Mac에서 `bash package-preview.sh /새로운/출력/폴더`를 실행하면 자동 검사 후 Mac·Windows 시험판 ZIP과 SHA-256 검사 목록이 생성됩니다. 이미 존재하는 출력 폴더는 덮어쓰지 않습니다. Mac 앱은 자체 서명 상태이며 Apple 공증을 받지 않았습니다. 이 명령은 GitHub에 업로드하거나 릴리스를 게시하지 않습니다. Windows 폴더의 시험판은 Mac과 기능이 다르며 실기기 검증이 남아 있습니다.
