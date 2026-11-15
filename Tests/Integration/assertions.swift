@@ -23,6 +23,12 @@ let snapshotURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["USAG
 let savedSnapshot = snapshotURL.appendingPathExtension("hold")
 try! FileManager.default.moveItem(at: snapshotURL, to: savedSnapshot)
 claude.claudeSetupState = .configured
+let diagnosticURL = snapshotURL.deletingLastPathComponent().appendingPathComponent("diagnostic.json")
+let diagnostic: [String: Any] = ["checked_at": Date().timeIntervalSince1970, "rate_limits_present": false, "valid_window_count": 0]
+try! JSONSerialization.data(withJSONObject: diagnostic).write(to: diagnosticURL)
+claude.refreshClaudeStatus()
+precondition(claude.claudeStatus == "Claude 사용량 미제공", "missing Claude usage should be explained")
+try! FileManager.default.removeItem(at: diagnosticURL)
 claude.refreshClaudeStatus()
 precondition(claude.claudeStatus == "사용 후 갱신", "configured Claude should not ask to connect again")
 claude.claudeSetupState = .other

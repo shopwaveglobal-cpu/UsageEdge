@@ -178,7 +178,15 @@ final class UsageModel: ObservableObject {
   guard let data = try? Data(contentsOf: url), let snapshot = ClaudeStatusParser.parse(data), !snapshot.windows.isEmpty else {
    claudeWindows = []
    switch claudeSetupState {
-   case .configured: claudeStatus = "사용 후 갱신"
+   case .configured:
+    let diagnosticURL = url.deletingLastPathComponent().appendingPathComponent("diagnostic.json")
+    let diagnostic = (try? Data(contentsOf: diagnosticURL)).flatMap { ClaudeDiagnosticParser.parse($0) }
+    switch diagnostic {
+    case .notProvided: claudeStatus = "Claude 사용량 미제공"
+    case .noValidWindows: claudeStatus = "사용량 정보 확인 필요"
+    case .captureFailed: claudeStatus = "사용량 기록 확인 필요"
+    case nil: claudeStatus = "사용 후 갱신"
+    }
    case .other: claudeStatus = "기존 상태줄 확인"
    case .missingHelper: claudeStatus = "연결 도구 확인"
    case .unreadable: claudeStatus = "설정 확인 불가"

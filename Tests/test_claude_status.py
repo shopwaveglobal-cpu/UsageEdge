@@ -29,6 +29,19 @@ class StatusTests(unittest.TestCase):
                     mod.main()
                 self.assertEqual(file.read_bytes(), original)
 
+    def test_diagnostics_do_not_save_private_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = {'session_id': 'private-session', 'email': 'private@example.com', 'rate_limits': {'five_hour': {'used_percentage': True}}}
+            with patch.object(mod.Path, 'home', return_value=pathlib.Path(tmp)), patch('sys.stdin', io.StringIO(json.dumps(payload))), patch('sys.stdout', io.StringIO()):
+                mod.main()
+            file = pathlib.Path(tmp) / 'Library/Application Support/UsageEdge/ClaudeStatus/diagnostic.json'
+            data = json.loads(file.read_text())
+            self.assertEqual(set(data), {'checked_at', 'rate_limits_present', 'valid_window_count'})
+            self.assertTrue(data['rate_limits_present'])
+            self.assertEqual(data['valid_window_count'], 0)
+            self.assertNotIn('private', file.read_text())
+            self.assertEqual(file.stat().st_mode & 0o777, 0o600)
+
     def test_capture_saves_only_limits_with_private_permissions(self):
         with tempfile.TemporaryDirectory() as tmp:
             payload = {'session_id': 'private', 'rate_limits': {'five_hour': {'used_percentage': 20}}}

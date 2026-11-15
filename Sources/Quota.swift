@@ -33,6 +33,22 @@ struct QuotaWindow {
  }
 }
 
+enum ClaudeDiagnosticParser {
+ enum State { case notProvided, noValidWindows, captureFailed }
+ static func parse(_ data: Data, now: Date = Date()) -> State? {
+  guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+        let timestamp = root["checked_at"] as? NSNumber, CFGetTypeID(timestamp) != CFBooleanGetTypeID(),
+        timestamp.doubleValue.isFinite, now.timeIntervalSince1970 - timestamp.doubleValue >= -60,
+        now.timeIntervalSince1970 - timestamp.doubleValue <= 900,
+        let present = root["rate_limits_present"] as? NSNumber, CFGetTypeID(present) == CFBooleanGetTypeID(),
+        let count = root["valid_window_count"] as? NSNumber, CFGetTypeID(count) != CFBooleanGetTypeID(),
+        count.doubleValue.isFinite, count.doubleValue.rounded() == count.doubleValue,
+        (0...2).contains(count.intValue) else { return nil }
+  if !present.boolValue { return .notProvided }
+  return count.intValue == 0 ? .noValidWindows : .captureFailed
+ }
+}
+
 enum ClaudeStatusParser {
  static func parse(_ data: Data, now: Date = Date()) -> (windows: [QuotaWindow], capturedAt: Date)? {
   guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
