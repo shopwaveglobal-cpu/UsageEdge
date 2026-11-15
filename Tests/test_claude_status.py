@@ -42,6 +42,15 @@ class StatusTests(unittest.TestCase):
             self.assertNotIn('private', file.read_text())
             self.assertEqual(file.stat().st_mode & 0o777, 0o600)
 
+    def test_diagnostic_write_failure_does_not_block_usage_capture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = pathlib.Path(tmp) / 'Library/Application Support/UsageEdge/ClaudeStatus'
+            (directory / 'diagnostic.json').mkdir(parents=True)
+            payload = {'rate_limits': {'five_hour': {'used_percentage': 20}}}
+            with patch.object(mod.Path, 'home', return_value=pathlib.Path(tmp)), patch('sys.stdin', io.StringIO(json.dumps(payload))), patch('sys.stdout', io.StringIO()):
+                mod.main()
+            self.assertEqual(json.loads((directory / 'snapshot.json').read_text())['rate_limits']['five_hour']['used_percentage'], 20)
+
     def test_capture_saves_only_limits_with_private_permissions(self):
         with tempfile.TemporaryDirectory() as tmp:
             payload = {'session_id': 'private', 'rate_limits': {'five_hour': {'used_percentage': 20}}}

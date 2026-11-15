@@ -55,7 +55,8 @@ def main():
         except (OSError, ValueError, TypeError, AttributeError):
             unchanged = False
         if not unchanged:
-            save_atomic(directory, 'diagnostic.json', diagnostic)
+            try: save_atomic(directory, 'diagnostic.json', diagnostic)
+            except OSError: pass
         if limits:
             save_atomic(directory, 'snapshot.json', {'captured_at': now, 'rate_limits': limits})
     except (OSError, ValueError, TypeError):
