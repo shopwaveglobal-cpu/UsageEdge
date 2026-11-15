@@ -1,4 +1,6 @@
 import http.server
+import datetime
+import json
 import pathlib
 import tempfile
 import os
@@ -13,7 +15,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         token = self.headers.get('Authorization')
         if token == 'Bearer good':
             self.send_response(200); self.end_headers()
-            self.wfile.write(b'{"code":0,"data":{"kind":"ok","quota":{"usages":{"limit5h":{"usedRatio":0.25},"limit7d":{"usedRatio":0.8}}}}}')
+            reset = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=3)).isoformat()
+            payload = {'code': 0, 'data': {'kind': 'ok', 'quota': {'usages': {'limit5h': {'usedRatio': 0.25, 'resetAt': reset}, 'limit7d': {'usedRatio': 0.8}}}}}
+            self.wfile.write(json.dumps(payload).encode())
         elif token == 'Bearer redirect':
             self.send_response(302); self.send_header('Location', '/unexpected'); self.end_headers()
         else:

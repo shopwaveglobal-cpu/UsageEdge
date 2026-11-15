@@ -31,6 +31,13 @@ jobs:
           & (Join-Path Windows ($testName + ".ps1"))
       - name: Verify Windows Kimi local HTTP
         run: python Tests/Integration/windows_kimi_http.py
+      - name: Verify Windows Copilot fake CLI
+        run: python Tests/Integration/windows_copilot.py
+      - name: Verify Windows Claude status capture
+        run: python Tests/test_windows_claude_status.py
+      - name: Verify Windows Claude setup
+        shell: powershell
+        run: powershell.exe -NoProfile -File Tests/Integration/windows_claude_setup.ps1
       - name: Exercise Windows form
         shell: powershell
         run: powershell.exe -NoProfile -STA -File Windows/UITest.ps1

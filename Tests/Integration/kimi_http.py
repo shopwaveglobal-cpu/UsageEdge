@@ -35,11 +35,11 @@ with tempfile.TemporaryDirectory(prefix='usageedge-kimi-') as tmp:
         subprocess.run([binary, str(server.server_port)], check=True, timeout=40)
         source = (root / 'Sources/main.swift').read_text()
         replacements = [
-            ('init() { schedule(); refresh() }', 'init() {}', 1),
+            ('init() { copilotEnabled = UserDefaults.standard.bool(forKey: "copilot.enabled"); inspectClaudeSetup(); schedule(); refresh() }', 'init() {}', 1),
             ('providerAccess.save(token, account: "KimiCodeLocal")', 'testSave(token)', 1),
             ('providerAccess.remove(account: "KimiCodeLocal")', 'testRemove()', 1),
             ('providerAccess.key(account: "KimiCodeLocal")', 'testKey()', 1),
-            ('UserDefaults.standard', 'UserDefaults(suiteName: ProcessInfo.processInfo.environment["USAGEEDGE_TEST_DEFAULTS"]!)!', 15),
+            ('UserDefaults.standard', 'UserDefaults(suiteName: ProcessInfo.processInfo.environment["USAGEEDGE_TEST_DEFAULTS"]!)!', 16),
             ('scheduleResets("Kimi", windows: []); ', '', 1),
             ('self.scheduleResets("Kimi", windows: result); ', '', 1),
         ]

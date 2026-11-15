@@ -17,6 +17,7 @@ swiftc -sdk "$SDK" -module-cache-path "$CACHE" Sources/KimiLocalRequest.swift Te
 "${TMPDIR:-/tmp}/usageedge-kimi-tests"
 python3 Tests/test_claude_status.py
 python3 Tests/test_claude_setup.py
+python3 Tests/test_package_windows.py
 python3 Tests/Integration/run.py "$SDK"
 swiftc -sdk "$SDK" -module-cache-path "$CACHE" -target arm64-apple-macos13.0 Sources/Quota.swift Sources/CodexAuth.swift Sources/APIProviders.swift Sources/ProviderAccess.swift Sources/KimiLocalRequest.swift Sources/main.swift -o "$CACHE/UsageEdge-arm64"
 swiftc -sdk "$SDK" -module-cache-path "$CACHE" -target x86_64-apple-macos13.0 Sources/Quota.swift Sources/CodexAuth.swift Sources/APIProviders.swift Sources/ProviderAccess.swift Sources/KimiLocalRequest.swift Sources/main.swift -o "$CACHE/UsageEdge-x86_64"

@@ -5,6 +5,11 @@ struct QuotaWindow {
  let remaining: Int
  let minutes: Int
  let reset: Date?
+ func displayRemaining(now: Date = Date()) -> Int? {
+  guard let reset = reset else { return remaining }
+  let seconds = reset.timeIntervalSince(now)
+  return seconds.isFinite && seconds > 0 ? remaining : nil
+ }
  func resetLabel(now: Date = Date()) -> String {
   guard let reset = reset else { return "초기화 시간 확인 불가" }
   let seconds = reset.timeIntervalSince(now)
@@ -126,5 +131,20 @@ enum KimiServerQuota {
          (0...1).contains(ratio.doubleValue) else { return nil }
    return QuotaWindow(remaining: Int(((1 - ratio.doubleValue) * 100).rounded()), minutes: minutes, reset: ProviderParser.date(item["resetAt"]))
   }
+ }
+}
+
+enum ClaudeSetupInspector {
+ enum State { case configured, missingHelper, absent, other, unreadable }
+ static func status(_ data: Data, helperPath: String, helperExists: Bool) -> State {
+  guard data.count <= 1_000_000,
+        let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return .unreadable }
+  guard let raw = root["statusLine"] else { return .absent }
+  let safe = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_@%+=:,./-")
+  let quoted = helperPath.unicodeScalars.allSatisfy { safe.contains($0) } && !helperPath.isEmpty
+   ? helperPath : "'" + helperPath.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+  guard let line = raw as? [String: Any], line["type"] as? String == "command",
+        line["command"] as? String == "python3 " + quoted else { return .other }
+  return helperExists ? .configured : .missingHelper
  }
 }
