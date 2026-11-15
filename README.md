@@ -74,7 +74,7 @@ Anthropic의 현재 [인증 정책](https://code.claude.com/docs/en/legal-and-co
 
 ## 자동 검증
 
-`.github/workflows/verify.yml`은 macOS 빌드·모의 통합 검사와 Windows PowerShell 구문·사용량 계산 검사를 실행하도록 설정되어 있습니다. 워크플로가 GitHub에서 실제 실행되기 전까지는 Windows 실행 성공 근거가 아닙니다. 로컬 HTTP 통합 검사는 루프백 포트 사용 권한이 필요합니다. GUI·실계정·재부팅 검사는 별도입니다.
+[GitHub Actions 검증 실행](https://github.com/shopwaveglobal-cpu/UsageEdge/actions/runs/43657773907)에서 macOS 빌드와 Windows PowerShell·모의 연동·폼·Claude DPAPI 검사가 통과했습니다. 이는 개인 PC의 실제 계정·알림·재부팅 검증을 대신하지 않습니다. 로컬 HTTP 통합 검사는 루프백 포트 사용 권한이 필요합니다.
 
 ## Gemini CLI
 

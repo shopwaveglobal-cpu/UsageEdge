@@ -1,6 +1,6 @@
 # UsageEdge Windows 시험판
 
-Windows 10/11용으로 작성한 시험판입니다. 이 파일은 macOS에서 제작했으며 실제 Windows 실행과 Codex 연결은 아직 검증하지 못했습니다. 공유 전 Windows PC에서 확인이 필요합니다.
+Windows 10/11용 시험판입니다. GitHub Actions의 Windows 환경에서 모의 응답과 위젯 화면을 검사했습니다. 개인 Windows PC의 실제 계정 연결과 표시 배율은 아직 확인하지 못했습니다.
 
 ## 시작
 
@@ -23,4 +23,4 @@ Windows 10/11용으로 작성한 시험판입니다. 이 파일은 macOS에서 �
 
 ## 검증
 
-PowerShell 구문과 가상의 Codex 응답 계산은 macOS PowerShell에서 확인했습니다. 브라우저 연결 메뉴는 공식 `codex login` 명령을 실행하도록 작성했으나 Windows에서 테스트하지 않았습니다. Windows의 UI, CLI 호출, 알림, 시작 시 실행과 실제 계정은 테스트하지 않았습니다. `검사.ps1`을 실행하면 계산 검사를 다시 할 수 있습니다. 인증은 CLI가 관리하며, 세션 만료 시 다시 로그인이 필요할 수 있습니다.
+[GitHub Actions Windows 검사](https://github.com/shopwaveglobal-cpu/UsageEdge/actions/runs/43657773907)에서 PowerShell 구문·사용량 계산, 모의 Codex·Kimi·Copilot 조회와 위젯 화면, Claude 연결 설정과 DPAPI 암호화 기록의 저장·갱신·복호화를 확인했습니다. 실제 계정, 브라우저 로그인, 알림 노출, 재부팅 후 시작과 개인 PC의 화면 배율은 확인하지 못했습니다. `검사.ps1`을 실행하면 계산 검사를 다시 할 수 있습니다. 인증은 CLI가 관리하며 세션 만료 시 다시 로그인이 필요할 수 있습니다.
