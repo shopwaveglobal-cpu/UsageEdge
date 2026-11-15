@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix='usageedge-kimi-') as tmp:
             ('providerAccess.save(token, account: "KimiCodeLocal")', 'testSave(token)', 1),
             ('providerAccess.remove(account: "KimiCodeLocal")', 'testRemove()', 1),
             ('providerAccess.key(account: "KimiCodeLocal")', 'testKey()', 1),
-            ('UserDefaults.standard', 'UserDefaults(suiteName: ProcessInfo.processInfo.environment["USAGEEDGE_TEST_DEFAULTS"]!)!', 16),
+            ('UserDefaults.standard', 'UserDefaults(suiteName: ProcessInfo.processInfo.environment["USAGEEDGE_TEST_DEFAULTS"]!)!', 17),
             ('scheduleResets("Kimi", windows: []); ', '', 1),
             ('self.scheduleResets("Kimi", windows: result); ', '', 1),
         ]
