@@ -180,7 +180,8 @@ final class UsageModel: ObservableObject {
    switch claudeSetupState {
    case .configured:
     let diagnosticURL = url.deletingLastPathComponent().appendingPathComponent("diagnostic.json")
-    let diagnostic = (try? Data(contentsOf: diagnosticURL)).flatMap { ClaudeDiagnosticParser.parse($0) }
+    let minimum = Date(timeIntervalSince1970: UserDefaults.standard.double(forKey: "claude.minimumCapture"))
+    let diagnostic = (try? Data(contentsOf: diagnosticURL)).flatMap { ClaudeDiagnosticParser.parse($0, notBefore: minimum) }
     switch diagnostic {
     case .notProvided: claudeStatus = "Claude 사용량 미제공"
     case .noValidWindows: claudeStatus = "사용량 정보 확인 필요"

@@ -37,6 +37,7 @@ import Foundation
   let status = #"{"captured_at":2000000000,"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":2000003600},"seven_day":{"used_percentage":40}}}"#.data(using: .utf8)!
   let diagnostic = #"{"checked_at":2000000000,"rate_limits_present":false,"valid_window_count":0}"#.data(using: .utf8)!
   precondition(ClaudeDiagnosticParser.parse(diagnostic, now: now) == .notProvided)
+  precondition(ClaudeDiagnosticParser.parse(diagnostic, now: now, notBefore: now.addingTimeInterval(1)) == nil)
   precondition(ClaudeDiagnosticParser.parse(diagnostic, now: now.addingTimeInterval(901)) == nil)
   let diagnosticInvalid = #"{"checked_at":2000000000,"rate_limits_present":true,"valid_window_count":0}"#.data(using: .utf8)!
   precondition(ClaudeDiagnosticParser.parse(diagnosticInvalid, now: now) == .noValidWindows)

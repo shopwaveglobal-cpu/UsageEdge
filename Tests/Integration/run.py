@@ -21,7 +21,7 @@ changes = [
  ('  if UserDefaults.standard.bool(forKey: "kimi.enabled") { refreshKimi() }\n', '', 1),
  ('  for provider in APIProvider.allCases where UserDefaults.standard.bool(forKey: "enabled.\\(provider.rawValue)") { refreshAPI(provider) }\n', '', 1),
  ('FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/UsageEdge/ClaudeStatus/snapshot.json")', 'URL(fileURLWithPath: ProcessInfo.processInfo.environment["USAGEEDGE_FAKE_SNAPSHOT"]!)', 1),
- ('UserDefaults.standard', 'UserDefaults(suiteName: ProcessInfo.processInfo.environment["USAGEEDGE_TEST_DEFAULTS"]!)!', 14),
+ ('UserDefaults.standard', 'UserDefaults(suiteName: ProcessInfo.processInfo.environment["USAGEEDGE_TEST_DEFAULTS"]!)!', 15),
  (original_paths, '[' + json.dumps(fake, ensure_ascii=False) + ']', 2),
  ('NSWorkspace.shared.open(start.url)', 'testOpen(start.url)', 1),
  ('providerAccess.key(provider)', 'testAPIKey(provider)', 1),
