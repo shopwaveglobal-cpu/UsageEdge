@@ -32,6 +32,7 @@ final class UsageModel: ObservableObject {
  @Published var updated: Date?
  @Published var expanded = true
  @Published var loginEnabled = SMAppService.mainApp.status == .enabled
+ @Published var loginMessage = SMAppService.mainApp.status == .requiresApproval ? "시스템 설정에서 자동 실행 승인 필요" : ""
  @Published var interval: Int = UserDefaults.standard.integer(forKey: "interval") == 0 ? 300 : UserDefaults.standard.integer(forKey: "interval")
  var timer: Timer?
  var busy = false
@@ -43,9 +44,12 @@ final class UsageModel: ObservableObject {
   timer = Timer.scheduledTimer(withTimeInterval: TimeInterval(interval), repeats: true) { [weak self] _ in self?.refresh() }
  }
  func setLogin(_ enabled: Bool) {
+  var failed = false
   do { if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() } }
-  catch { status = "로그인 항목 설정 실패" }
-  loginEnabled = SMAppService.mainApp.status == .enabled
+  catch { failed = true }
+  let serviceStatus = SMAppService.mainApp.status
+  loginEnabled = serviceStatus == .enabled
+  loginMessage = serviceStatus == .requiresApproval ? "시스템 설정에서 자동 실행 승인 필요" : (failed ? "자동 실행 설정 실패" : "")
  }
  func connectCodex() {
   guard !loginInProgress else { return }
@@ -471,6 +475,10 @@ struct WidgetView: View {
    Button("Claude 사용량 열기") { model.connectClaude() }
    Picker("자동 새로고침", selection: $model.interval) { Text("5분").tag(300); Text("10분").tag(600); Text("30분").tag(1800) }.onChange(of: model.interval) { _ in model.schedule() }
    Toggle("로그인 시 실행", isOn: Binding(get: { model.loginEnabled }, set: { model.setLogin($0) }))
+   if !model.loginMessage.isEmpty {
+    Text(model.loginMessage)
+    Button("로그인 항목 설정 열기") { SMAppService.openSystemSettingsLoginItems() }
+   }
    Button("알림 테스트") { model.testNotification() }
    Button("예약 알림 확인") { model.checkScheduledNotifications() }
    Button("알림 설정 열기") { if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") { NSWorkspace.shared.open(url) } }
