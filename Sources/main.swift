@@ -55,6 +55,7 @@ final class UsageModel: ObservableObject {
   guard !loginInProgress else { return }
   let paths = ["/Applications/Codex.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex", "/opt/homebrew/bin/codex", "/usr/local/bin/codex"]
   guard let path = paths.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { status = "Codex CLI 설치 필요"; return }
+  windows = []; updated = nil; scheduleResets("Codex", windows: []); resize?()
   refreshPending = false; loginInProgress = true; status = "브라우저 연결 준비 중"
   let attempt = loginAttempt.begin()
   let process = Process(); process.executableURL = URL(fileURLWithPath: path); process.arguments = ["app-server", "--stdio"]

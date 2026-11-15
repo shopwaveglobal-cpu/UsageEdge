@@ -27,6 +27,7 @@ changes = [
  ('providerAccess.key(provider)', 'testAPIKey(provider)', 1),
  ('providerAccess.fetch(provider, key: key)', 'testAPIFetch(provider, key: key)', 1),
  ('scheduleResets("Codex", windows: result); ', '', 1),
+ ('scheduleResets("Codex", windows: []); ', '', 1),
  ('scheduleResets("Claude", windows: []); ', '', 3),
  ('scheduleResets("Claude", windows: snapshot.windows); ', '', 1),
 ]
