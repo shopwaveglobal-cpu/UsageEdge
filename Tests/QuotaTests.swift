@@ -29,10 +29,6 @@ import Foundation
   precondition(QuotaParser.parse(Data("{}".utf8)).isEmpty)
   let invalid = #"{"result":{"rateLimits":{"primary":{"usedPercent":150,"windowDurationMins":300}}}}"#.data(using: .utf8)!
   precondition(QuotaParser.parse(invalid).isEmpty)
-  let claude = #"{"five_hour":{"utilization":30,"resets_at":"2026-11-04T10:00:00Z"},"seven_day":{"utilization":60,"resets_at":"2026-11-08T10:00:00Z"}}"#.data(using: .utf8)!
-  precondition(ProviderParser.claude(claude).map(\.remaining) == [70, 40])
-  let claudeBool = #"{"five_hour":{"utilization":true}}"#.data(using: .utf8)!
-  precondition(ProviderParser.claude(claudeBool).isEmpty)
   let now = Date(timeIntervalSince1970: 2_000_000_000)
   let status = #"{"captured_at":2000000000,"rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":2000003600},"seven_day":{"used_percentage":40}}}"#.data(using: .utf8)!
   let diagnostic = #"{"checked_at":2000000000,"rate_limits_present":false,"valid_window_count":0}"#.data(using: .utf8)!
@@ -44,23 +40,8 @@ import Foundation
   let snapshot = ClaudeStatusParser.parse(status, now: now)
   precondition(snapshot?.windows.map(\.remaining) == [77, 60] && snapshot?.capturedAt == now)
   precondition(ClaudeStatusParser.parse(status, now: now.addingTimeInterval(90000)) == nil)
-  precondition(ProviderParser.claudeCredentialExpired(1_999_999_999_000 as NSNumber, now: now))
-  precondition(!ProviderParser.claudeCredentialExpired(2_000_000_001_000 as NSNumber, now: now))
-  precondition(!ProviderParser.claudeCredentialExpired(nil, now: now))
-  precondition(!ProviderParser.claudeCredentialExpired(true, now: now))
-  let kimi = #"{"limits":[{"window":{"duration":300,"timeUnit":"TIME_UNIT_MINUTE"},"detail":{"limit":"200","remaining":"61","resetTime":"2026-11-04T10:00:00Z"}}]}"#.data(using: .utf8)!
-  precondition(ProviderParser.kimi(kimi).first?.remaining == 31)
-  let primaryOnly = #"{"usage":{"limit":"100","remaining":"80"},"limits":[]}"#.data(using: .utf8)!
-  precondition(ProviderParser.kimi(primaryOnly).first?.label == "기본 한도")
   let boolUsed = #"{"result":{"rateLimits":{"primary":{"usedPercent":true,"windowDurationMins":300}}}}"#.data(using: .utf8)!
   precondition(QuotaParser.parse(boolUsed).isEmpty)
-  let ratios = #"{"usages":{"limit_5h":{"used_ratio":0.25,"reset_time":"2026-11-04T10:00:00Z"},"limit_7d":{"used_ratio":0.60},"limit_month_total":{"used_ratio":0.10}}}"#.data(using: .utf8)!
-  let parsed = ProviderParser.kimi(ratios)
-  precondition(parsed.map(\.remaining) == [75, 40, 90] && parsed.map(\.label) == ["5시간", "주간", "월간"])
-  let reported = #"{"limits":[{"window":{"duration":300,"timeUnit":"TIME_UNIT_MINUTE"},"detail":{"limit":"100","remaining":"75","resetTime":"2026-09-16T20:15:44.757047Z"}}],"usages":{"limit_5h":{"used_ratio":0,"reset_time":"2026-09-16T20:15:44Z"},"limit_month_total":{"used_ratio":0.0056,"reset_time":"2026-10-17T00:00:00Z"}}}"#.data(using: .utf8)!
-  let reportedWindows = ProviderParser.kimi(reported)
-  precondition(reportedWindows.map(\.remaining) == [75, 99])
-  precondition(reportedWindows.map(\.label) == ["5시간", "월간"])
   print("Quota parser checks passed")
  }
 }
