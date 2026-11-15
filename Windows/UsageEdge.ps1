@@ -2,6 +2,9 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'Quota.ps1')
+. (Join-Path $PSScriptRoot 'ClaudeSetup.ps1')
+. (Join-Path $PSScriptRoot 'ClaudeSnapshot.ps1')
+$script:appRoot = $PSScriptRoot
 [System.Windows.Forms.Application]::EnableVisualStyles()
 $bg = [System.Drawing.Color]::FromArgb(19,21,26)
 $card = [System.Drawing.Color]::FromArgb(30,32,38)
@@ -25,6 +28,12 @@ $heading=Label $form 'USAGE  /  사용량' 16 15 180 26 11 $white
 $refresh=Button $form '↻' 175 12 26 28
 $collapse=Button $form '›' 206 12 24 28
 $compactInfo=Label $form '5H —  |  주 —' 7 22 105 22 8 $white; $compactInfo.Visible=$false
+$compactClaude=Label $form '' 7 42 105 20 8 $white; $compactClaude.Visible=$false
+$compactCopilot=Label $form '' 7 42 105 20 8 $white; $compactCopilot.Visible=$false
+$copilotLabel=Label $form '' 16 280 210 24 9 $muted; $copilotLabel.Visible=$false
+$compactKimi=Label $form '' 7 42 105 20 8 $white; $compactKimi.Visible=$false
+$kimiLabel=Label $form '' 16 280 210 24 9 $muted; $kimiLabel.Visible=$false
+$kimiTip=New-Object System.Windows.Forms.ToolTip
 $claude=Label $form 'Claude   ·   공식 사용량 화면 열기' 16 55 210 28 9 $muted
 $claude.Cursor=[System.Windows.Forms.Cursors]::Hand
 $claude.Add_Click({Start-Process 'https://claude.ai/settings/usage'})
@@ -63,22 +72,127 @@ $connect.Add_Click({
   $status.Text='브라우저에서 로그인 중'
  } catch { $status.Text='Codex 로그인 실행 실패' }
 })
+$script:claudeHome=[Environment]::GetFolderPath('UserProfile'); $script:claudeState=Get-ClaudeConnectionState $script:claudeHome
+$script:claudeWindows=@(); $script:claudeNotified=@{}
+$claudeConnect=New-Object System.Windows.Forms.ToolStripMenuItem('Claude Code 연결'); [void]$menu.Items.Add($claudeConnect)
+$claudeDisconnect=New-Object System.Windows.Forms.ToolStripMenuItem('Claude Code 연결 해제'); [void]$menu.Items.Add($claudeDisconnect)
+$claudeConnect.Add_Click({
+ $result=Set-ClaudeConnection $script:claudeHome (Join-Path $script:appRoot 'ClaudeStatus.ps1') 'install'
+ if ($result -eq 'installed') { $script:claudeState='connected'; $script:claudeWindows=@(); $script:claudeNotified=@{}; Update-KimiLayout; Update-ClaudeView; [System.Windows.Forms.MessageBox]::Show('Claude Code를 다시 열고 메시지를 보내면 사용량이 제공되는 경우 표시됩니다.') | Out-Null }
+ else { [System.Windows.Forms.MessageBox]::Show('Claude 연결을 변경하지 못했습니다. 기존 상태줄이나 설정 파일을 확인하세요.') | Out-Null }
+})
+$claudeDisconnect.Add_Click({
+ $result=Set-ClaudeConnection $script:claudeHome (Join-Path $script:appRoot 'ClaudeStatus.ps1') 'uninstall'
+ if ($result -eq 'removed') { $script:claudeState='missing'; $script:claudeWindows=@(); $claude.Text='Claude   ·   공식 사용량 화면 열기'; $compactClaude.Text=''; Update-KimiLayout }
+ else { [System.Windows.Forms.MessageBox]::Show('Claude 연결을 해제하지 못했습니다. 상태줄 설정을 확인하세요.') | Out-Null }
+})
+$script:kimiKey='HKCU:\Software\UsageEdge'
+$script:kimiPort=0; $script:kimiWindows=@(); $script:kimiJob=$null; $script:kimiNotified=@{}; $script:kimiLast=[DateTime]::MinValue
+try { $saved=(Get-ItemProperty -LiteralPath $script:kimiKey -Name KimiPort -ErrorAction Stop).KimiPort; if ([int]$saved -ge 1 -and [int]$saved -le 65535) { $script:kimiPort=[int]$saved } } catch {}
+$script:copilotEnabled=$false; $script:copilotJob=$null; $script:copilotLast=[DateTime]::MinValue
+try { $script:copilotEnabled = (Get-ItemProperty -LiteralPath $script:kimiKey -Name CopilotEnabled -ErrorAction Stop).CopilotEnabled -eq 1 } catch {}
+$copilotToggle=New-Object System.Windows.Forms.ToolStripMenuItem('Copilot 개인 청구 조회'); $copilotToggle.CheckOnClick=$true; $copilotToggle.Checked=$script:copilotEnabled; [void]$menu.Items.Add($copilotToggle)
+$copilotToggle.Add_Click({
+ try { New-Item -Path $script:kimiKey -Force | Out-Null; Set-ItemProperty -LiteralPath $script:kimiKey -Name CopilotEnabled -Value ([int]$copilotToggle.Checked) -Type DWord -ErrorAction Stop }
+ catch { $copilotToggle.Checked=$script:copilotEnabled; [System.Windows.Forms.MessageBox]::Show('설정을 저장하지 못했습니다.') | Out-Null; return }
+ $script:copilotEnabled=$copilotToggle.Checked
+ if ($script:copilotJob) { Stop-Job $script:copilotJob -ErrorAction SilentlyContinue; Remove-Job $script:copilotJob -Force -ErrorAction SilentlyContinue; $script:copilotJob=$null }
+ if ($script:copilotEnabled) { $copilotLabel.Text='Copilot 확인 중'; $compactCopilot.Text='GH 확인 중'; Start-CopilotRefresh -Force }
+ else { $copilotLabel.Text=''; $compactCopilot.Text='' }
+ Update-KimiLayout
+})
+function Start-CopilotRefresh {
+ param([switch]$Force)
+ if (-not $script:copilotEnabled -or $script:copilotJob) { return }
+ if (-not $Force -and ((Get-Date)-$script:copilotLast).TotalSeconds -lt 300) { return }
+ $script:copilotLast=Get-Date
+ $script:copilotJob=Start-Job -ArgumentList $script:appRoot -ScriptBlock {
+  param($root)
+  . (Join-Path $root 'Quota.ps1'); . (Join-Path $root 'Copilot.ps1')
+  Get-CopilotBilling
+ }
+}
+$kimiConnect=New-Object System.Windows.Forms.ToolStripMenuItem('Kimi Code 연결…'); [void]$menu.Items.Add($kimiConnect)
+$kimiDisconnect=New-Object System.Windows.Forms.ToolStripMenuItem('Kimi Code 연결 해제'); [void]$menu.Items.Add($kimiDisconnect)
+$kimiConnect.Add_Click({
+ Add-Type -AssemblyName Microsoft.VisualBasic
+ $chosen=[Microsoft.VisualBasic.Interaction]::InputBox('실행 중인 Kimi Code 서버의 로컬 포트를 입력하세요. 서버 토큰 파일을 읽어 해당 포트로 전송합니다.','Kimi Code 연결','58627')
+ if ([string]::IsNullOrWhiteSpace($chosen)) { return }
+ $number=0
+ if (-not [int]::TryParse($chosen,[ref]$number) -or $number -lt 1 -or $number -gt 65535) { [System.Windows.Forms.MessageBox]::Show('포트를 확인하세요.') | Out-Null; return }
+ try { New-Item -Path $script:kimiKey -Force | Out-Null; Set-ItemProperty -LiteralPath $script:kimiKey -Name KimiPort -Value $number -Type DWord -ErrorAction Stop }
+ catch { [System.Windows.Forms.MessageBox]::Show('설정을 저장하지 못했습니다.') | Out-Null; return }
+ if ($script:kimiJob) { Stop-Job $script:kimiJob -ErrorAction SilentlyContinue; Remove-Job $script:kimiJob -Force -ErrorAction SilentlyContinue; $script:kimiJob=$null }
+ $script:kimiPort=$number; $script:kimiWindows=@(); $script:kimiNotified=@{}; $kimiLabel.Text='Kimi Code 확인 중'; $compactKimi.Text='K 확인 중'; $kimiTip.SetToolTip($kimiLabel, ''); Update-KimiLayout; Start-KimiRefresh -Force
+})
+$kimiDisconnect.Add_Click({
+ try {
+  $existing=Get-ItemProperty -LiteralPath $script:kimiKey -Name KimiPort -ErrorAction SilentlyContinue
+  if ($null -ne $existing) { Remove-ItemProperty -LiteralPath $script:kimiKey -Name KimiPort -ErrorAction Stop }
+ } catch { [System.Windows.Forms.MessageBox]::Show('연결 해제 설정을 저장하지 못했습니다.') | Out-Null; return }
+ $script:kimiPort=0; $script:kimiWindows=@()
+ if ($script:kimiJob) { Stop-Job $script:kimiJob -ErrorAction SilentlyContinue; Remove-Job $script:kimiJob -Force -ErrorAction SilentlyContinue; $script:kimiJob=$null }
+ Update-KimiLayout
+})
+function Update-KimiLayout {
+ $hasKimi=$script:kimiPort -gt 0
+ $hasCopilot=$script:copilotEnabled
+ $hasClaude=$script:claudeState -eq 'connected'
+ $count=[int]$hasKimi+[int]$hasCopilot+[int]($hasClaude -and $script:collapsed)
+ $compactClaude.Visible=$hasClaude -and $script:collapsed
+ $compactKimi.Top=42+18*[int]$hasClaude
+ $kimiLabel.Visible=$hasKimi -and -not $script:collapsed
+ $compactKimi.Visible=$hasKimi -and $script:collapsed
+ $copilotLabel.Visible=$hasCopilot -and -not $script:collapsed
+ $compactCopilot.Visible=$hasCopilot -and $script:collapsed
+ $copilotLabel.Top=280+25*[int]$hasKimi; $compactCopilot.Top=42+18*([int]$hasKimi+[int]$hasClaude)
+ if ($script:collapsed) { $form.Height=66+18*$count; $collapse.SetBounds(112,19,24,28) }
+ else { $form.Height=320+25*$count; $settings.Top=290+25*$count }
+ $area=[System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+ $form.Location=New-Object System.Drawing.Point(($area.Right-$form.Width-5),($area.Top+[int](($area.Height-$form.Height)/2)))
+}
+function Start-KimiRefresh {
+ param([switch]$Force)
+ if ($script:kimiPort -le 0 -or $script:kimiJob) { return }
+ if (-not $Force -and ((Get-Date)-$script:kimiLast).TotalSeconds -lt 300) { return }
+ $script:kimiLast=Get-Date
+ $tokenPath=Join-Path ([Environment]::GetFolderPath('UserProfile')) '.kimi-code\server.token'
+ $script:kimiJob=Start-Job -ArgumentList $script:appRoot,$script:kimiPort,$tokenPath -ScriptBlock {
+  param($root,$port,$tokenPath)
+  . (Join-Path $root 'Quota.ps1'); . (Join-Path $root 'Kimi.ps1')
+  Get-KimiUsageFromFile $port $tokenPath
+ }
+}
 $test=New-Object System.Windows.Forms.ToolStripMenuItem('알림 테스트'); [void]$menu.Items.Add($test)
 $quit=New-Object System.Windows.Forms.ToolStripMenuItem('종료'); [void]$menu.Items.Add($quit)
 $settings.Add_Click({$menu.Show($settings,0,$settings.Height)})
 $tray=New-Object System.Windows.Forms.NotifyIcon; $tray.Icon=[System.Drawing.SystemIcons]::Application; $tray.Text='UsageEdge'; $tray.Visible=$true
 $tray.ContextMenuStrip=$menu; $tray.Add_DoubleClick({if($form.Visible){$form.Hide()}else{$form.Show()}})
-$quit.Add_Click({$form.Close()}); $form.Add_FormClosed({$timer.Stop();if($script:job){$script:job | Stop-Job -ErrorAction SilentlyContinue; $script:job | Remove-Job -Force -ErrorAction SilentlyContinue};$tray.Visible=$false;$tray.Dispose()})
+$quit.Add_Click({$form.Close()}); $form.Add_FormClosed({$timer.Stop();if($script:job){$script:job | Stop-Job -ErrorAction SilentlyContinue; $script:job | Remove-Job -Force -ErrorAction SilentlyContinue};if($script:kimiJob){$script:kimiJob | Stop-Job -ErrorAction SilentlyContinue; $script:kimiJob | Remove-Job -Force -ErrorAction SilentlyContinue};if($script:copilotJob){$script:copilotJob | Stop-Job -ErrorAction SilentlyContinue; $script:copilotJob | Remove-Job -Force -ErrorAction SilentlyContinue};$tray.Visible=$false;$tray.Dispose();$kimiTip.Dispose()})
 $test.Add_Click({$tray.ShowBalloonTip(5000,'UsageEdge 알림 테스트','초기화 알림이 이 방식으로 표시됩니다.',[System.Windows.Forms.ToolTipIcon]::Info)})
 $script:collapsed=$false
 $collapse.Add_Click({
  $script:collapsed=-not $script:collapsed
- foreach($c in $form.Controls){if($c -ne $collapse -and $c -ne $compactInfo){$c.Visible=-not $script:collapsed}}
+ foreach($c in $form.Controls){if($c -ne $collapse -and $c -ne $compactInfo -and $c -ne $compactKimi -and $c -ne $kimiLabel -and $c -ne $compactCopilot -and $c -ne $copilotLabel -and $c -ne $compactClaude){$c.Visible=-not $script:collapsed}}
  $compactInfo.Visible=$script:collapsed
  if($script:collapsed){$form.Width=140;$form.Height=66;$collapse.SetBounds(112,19,24,28);$collapse.Text='‹'}else{$form.Width=240;$form.Height=320;$collapse.SetBounds(206,12,24,28);$collapse.Text='›'}
- $area=[System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea; $form.Location=New-Object System.Drawing.Point(($area.Right-$form.Width-5),($area.Top+[int](($area.Height-$form.Height)/2)))
+ Update-KimiLayout
 })
-$script:job=$null; $script:lastRefresh=[DateTime]::MinValue; $script:windows=@(); $script:notified=@{}
+function Update-ClaudeView {
+ if ($script:claudeState -ne 'connected') { return }
+ $snapshot=Get-ClaudeSnapshot
+ if ($snapshot.State -eq 'fresh') {
+  $script:claudeWindows=@($snapshot.Windows); $summary=Get-CompactSummary $script:claudeWindows
+  $claude.Text='Claude  '+$summary; $compactClaude.Text='C  '+$summary
+  foreach ($cw in $script:claudeWindows) {
+   if ($cw.Reset) { $delta=((Get-Date)-$cw.Reset).TotalSeconds; $key="$($cw.Minutes):$($cw.Reset.Ticks)"; if ($delta -ge 0 -and $delta -lt 600 -and -not $script:claudeNotified.ContainsKey($key)) { $script:claudeNotified[$key]=$true; $tray.ShowBalloonTip(5000,'Claude 사용량 초기화',"$($cw.Label) 한도의 초기화 예정 시각입니다. Claude Code 사용 후 확인하세요.",[System.Windows.Forms.ToolTipIcon]::Info) } }
+  }
+ } else {
+  $script:claudeWindows=@(); $compactClaude.Text='C  5H — | 주 —'
+  $claude.Text=switch ($snapshot.State) { 'stale' {'Claude 오래된 값 · 사용 후 갱신'} 'expired' {'Claude 사용 후 갱신'} 'invalid' {'Claude 기록 확인 필요'} default {'Claude Code 사용 후 갱신'} }
+ }
+}
+$script:job=$null; $script:lastRefresh=[DateTime]::MinValue; $script:windows=@(); $script:notified=@{}; $script:codexStale=$false
 function Start-Refresh {
  if ($null -ne $script:job) {return}
  $status.Text='확인 중'; $script:lastRefresh=Get-Date
@@ -109,9 +223,10 @@ function Start-Refresh {
   finally { if($p -and !$p.HasExited){$p.Kill()}; if($p){$p.Dispose()} }
  }
 }
-$refresh.Add_Click({Start-Refresh})
+$refresh.Add_Click({Start-Refresh; Start-KimiRefresh -Force; Start-CopilotRefresh -Force})
 $timer=New-Object System.Windows.Forms.Timer; $timer.Interval=1000
 $timer.Add_Tick({
+ Update-ClaudeView
  if($script:loginProcess -and $script:loginProcess.HasExited){
   $code=$script:loginProcess.ExitCode; $script:loginProcess.Dispose(); $script:loginProcess=$null
   if($code -eq 0){$script:loginRefreshPending=$true} else {$status.Text='로그인 미완료 · 다시 시도'}
@@ -119,19 +234,61 @@ $timer.Add_Tick({
  if($script:job -and $script:job.State -in @('Completed','Failed','Stopped')){
   $result=Receive-Job $script:job -ErrorAction SilentlyContinue; Remove-Job $script:job -Force -ErrorAction SilentlyContinue; $script:job=$null
   if($result -and $result.windows){
-   $script:windows=@($result.windows); $status.Text='연결됨 · '+(Get-Date -Format 'HH:mm')
+   $script:windows=@($result.windows); $script:codexStale=$false; $status.Text='연결됨 · '+(Get-Date -Format 'HH:mm')
    for($i=0;$i -lt 2;$i++){
     $row=$rows[$i]; if($i -lt $script:windows.Count){$w=$script:windows[$i]; $row.Title.Text=$w.Label; $row.Value.Text="$($w.Remaining)% 남음"; $row.Bar.Value=[int]$w.Remaining; $row.Date.Text=if($w.Reset){'초기화 '+$w.Reset.ToString('M월 d일 HH:mm')}else{'초기화 시간 확인 불가'}}
     else{$row.Title.Text='';$row.Value.Text='';$row.Bar.Value=0;$row.Date.Text=''}
    }
-  } else { $script:windows=@(); $status.Text=if($result.error){$result.error}else{'확인 불가'}; foreach($row in $rows){$row.Title.Text='';$row.Value.Text='';$row.Bar.Value=0;$row.Date.Text=''} }
-  $compactInfo.Text=Get-CompactSummary $script:windows
+  } else {
+   $state=Resolve-RefreshState $script:windows $result
+   $script:windows=@($state.Windows); $script:codexStale=$state.Stale
+   $reason=if($result.error){$result.error}else{'확인 불가'}
+   $status.Text=if($state.Stale){'오래된 값 · '+$reason}else{$reason}
+  }
+  $compactInfo.Text=if($result -and $result.windows){Get-CompactSummary $script:windows}else{Get-CompactSummary @()}
+ }
+ if($script:copilotJob -and $script:copilotJob.State -eq 'Running' -and ((Get-Date)-$script:copilotLast).TotalSeconds -gt 30) {
+  Stop-Job $script:copilotJob -ErrorAction SilentlyContinue; Remove-Job $script:copilotJob -Force -ErrorAction SilentlyContinue; $script:copilotJob=$null
+  $copilotLabel.Text='Copilot 조회 시간 초과'; $compactCopilot.Text='GH 확인 필요'
+ }
+ if($script:copilotJob -and $script:copilotJob.State -in @('Completed','Failed','Stopped')) {
+  $cr=Receive-Job $script:copilotJob -ErrorAction SilentlyContinue; Remove-Job $script:copilotJob -Force -ErrorAction SilentlyContinue; $script:copilotJob=$null
+  if($cr -and $cr.Summary){
+   $copilotLabel.Text='Copilot '+$cr.Summary; $kimiTip.SetToolTip($copilotLabel, $copilotLabel.Text)
+   if ($cr.Summary -match '^이번 달 보고된 사용 (.+) 크레딧$') { $compactCopilot.Text='GH '+$Matches[1]+' cr' }
+   else { $compactCopilot.Text='GH 청구 기록 없음' }
+  }
+  else { $copilotLabel.Text='Copilot 개인 결제·권한 확인'; $compactCopilot.Text='GH 확인 필요' }
+ }
+ if($script:kimiJob -and $script:kimiJob.State -in @('Completed','Failed','Stopped')) {
+  $kr=Receive-Job $script:kimiJob -ErrorAction SilentlyContinue; Remove-Job $script:kimiJob -Force -ErrorAction SilentlyContinue; $script:kimiJob=$null
+  if ($kr -and $kr.Windows) {
+   $script:kimiWindows=@($kr.Windows); $summary=Get-CompactSummary $script:kimiWindows
+   $kimiLabel.Text='Kimi  '+$summary; $compactKimi.Text='K  '+$summary
+   $resetText=($script:kimiWindows | Where-Object { $_.Reset } | ForEach-Object { $_.Label+' '+$_.Reset.ToString('M/d HH:mm') }) -join ' · '
+   $kimiTip.SetToolTip($kimiLabel, $(if($resetText){'초기화 예정: '+$resetText}else{'초기화 시간 확인 불가'}))
+  } else { $kimiLabel.Text=if($script:kimiWindows.Count){'Kimi 오래된 값 · 연결 확인'}else{'Kimi 연결 확인 필요'}; $compactKimi.Text='K  5H — | 주 —' }
+ }
+ foreach($kw in $script:kimiWindows) {
+  if($kw.Reset){$delta=((Get-Date)-$kw.Reset).TotalSeconds; $key="$($kw.Minutes):$($kw.Reset.Ticks)"; if($delta -ge 0 -and $delta -lt 600 -and !$script:kimiNotified.ContainsKey($key)){$script:kimiNotified[$key]=$true;$tray.ShowBalloonTip(5000,'Kimi Code 사용량 초기화',"$($kw.Label) 한도의 초기화 예정 시각입니다. 새로고침해 확인하세요.",[System.Windows.Forms.ToolTipIcon]::Info);Start-KimiRefresh -Force}}
+ }
+ $now=Get-Date
+ if ($script:windows.Count -gt 0) {
+  if (-not $script:codexStale) { $compactInfo.Text=Get-CompactSummary $script:windows $now }
+  for ($i=0; $i -lt [Math]::Min(2,$script:windows.Count); $i++) {
+   $w=$script:windows[$i]
+   if ($w.Reset -and $w.Reset -le $now) { $rows[$i].Value.Text='—'; $rows[$i].Bar.Value=0; $rows[$i].Date.Text='초기화 확인 중' }
+  }
+ }
+ if ($script:kimiWindows.Count -gt 0 -and $kimiLabel.Text -notlike '*오래된 값*') {
+  $summary=Get-CompactSummary $script:kimiWindows $now
+  $kimiLabel.Text='Kimi  '+$summary; $compactKimi.Text='K  '+$summary
  }
  if($script:loginRefreshPending -and -not $script:job){$script:loginRefreshPending=$false; Start-Refresh}
- if(((Get-Date)-$script:lastRefresh).TotalSeconds -ge 300){Start-Refresh}
+ if(((Get-Date)-$script:lastRefresh).TotalSeconds -ge 300){Start-Refresh; Start-KimiRefresh; Start-CopilotRefresh}
  foreach($w in $script:windows){
   if($w.Reset){$delta=((Get-Date)-$w.Reset).TotalSeconds; $key="$($w.Minutes):$($w.Reset.Ticks)"; if($delta -ge 0 -and $delta -lt 600 -and !$script:notified.ContainsKey($key)){$script:notified[$key]=$true;$tray.ShowBalloonTip(5000,'Codex 사용량 초기화',"$($w.Label) 한도의 초기화 예정 시각입니다. 새로고침해 확인하세요.",[System.Windows.Forms.ToolTipIcon]::Info);Start-Refresh}}
  }
 })
-$form.Add_Shown({Start-Refresh; $timer.Start()})
+$form.Add_Shown({Update-KimiLayout; Update-ClaudeView; Start-Refresh; Start-KimiRefresh; Start-CopilotRefresh; $timer.Start()})
 [System.Windows.Forms.Application]::Run($form)

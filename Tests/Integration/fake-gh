@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+import json, os, sys, time
+from pathlib import Path
+args = sys.argv[1:]
+if '--hostname' not in args or args[args.index('--hostname') + 1] != 'github.com': sys.exit(1)
+if 'user' in args:
+    print('test-user')
+elif 'users/test-user/settings/billing/ai_credit/usage' in args:
+    mode = os.environ.get('USAGEEDGE_FAKE_COPILOT_MODE', 'ok')
+    if mode == 'denied': sys.exit(1)
+    if mode == 'slow':
+        Path(os.environ['USAGEEDGE_FAKE_COPILOT_MARKER']).touch()
+        time.sleep(1)
+    print(json.dumps({'usageItems': [{'product': 'Copilot AI Credits', 'unitType': 'ai-credits', 'grossQuantity': 19.75}]}))
+else:
+    sys.exit(1)

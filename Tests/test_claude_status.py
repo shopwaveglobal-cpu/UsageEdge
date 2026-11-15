@@ -18,6 +18,39 @@ class StatusTests(unittest.TestCase):
     def test_invalid_or_absent_values_are_not_invented(self):
         self.assertEqual(mod.extract({'rate_limits': {'five_hour': {'used_percentage': True}, 'seven_day': {'used_percentage': 101}}}), {})
         self.assertEqual(mod.extract({}), {})
+    def test_missing_limits_preserve_previous_observation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(mod.Path, 'home', return_value=pathlib.Path(tmp)), patch('sys.stdout', io.StringIO()):
+                with patch('sys.stdin', io.StringIO(json.dumps({'rate_limits': {'five_hour': {'used_percentage': 20}}}))):
+                    mod.main()
+                file = pathlib.Path(tmp) / 'Library/Application Support/UsageEdge/ClaudeStatus/snapshot.json'
+                original = file.read_bytes()
+                with patch('sys.stdin', io.StringIO('{}')):
+                    mod.main()
+                self.assertEqual(file.read_bytes(), original)
+
+    def test_diagnostics_do_not_save_private_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = {'session_id': 'private-session', 'email': 'private@example.com', 'rate_limits': {'five_hour': {'used_percentage': True}}}
+            with patch.object(mod.Path, 'home', return_value=pathlib.Path(tmp)), patch('sys.stdin', io.StringIO(json.dumps(payload))), patch('sys.stdout', io.StringIO()):
+                mod.main()
+            file = pathlib.Path(tmp) / 'Library/Application Support/UsageEdge/ClaudeStatus/diagnostic.json'
+            data = json.loads(file.read_text())
+            self.assertEqual(set(data), {'checked_at', 'rate_limits_present', 'valid_window_count'})
+            self.assertTrue(data['rate_limits_present'])
+            self.assertEqual(data['valid_window_count'], 0)
+            self.assertNotIn('private', file.read_text())
+            self.assertEqual(file.stat().st_mode & 0o777, 0o600)
+
+    def test_diagnostic_write_failure_does_not_block_usage_capture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = pathlib.Path(tmp) / 'Library/Application Support/UsageEdge/ClaudeStatus'
+            (directory / 'diagnostic.json').mkdir(parents=True)
+            payload = {'rate_limits': {'five_hour': {'used_percentage': 20}}}
+            with patch.object(mod.Path, 'home', return_value=pathlib.Path(tmp)), patch('sys.stdin', io.StringIO(json.dumps(payload))), patch('sys.stdout', io.StringIO()):
+                mod.main()
+            self.assertEqual(json.loads((directory / 'snapshot.json').read_text())['rate_limits']['five_hour']['used_percentage'], 20)
+
     def test_capture_saves_only_limits_with_private_permissions(self):
         with tempfile.TemporaryDirectory() as tmp:
             payload = {'session_id': 'private', 'rate_limits': {'five_hour': {'used_percentage': 20}}}

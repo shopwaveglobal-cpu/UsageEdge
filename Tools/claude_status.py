@@ -29,20 +29,36 @@ def extract(data):
     return out
 
 
+def save_atomic(directory, name, value):
+    fd, temp = tempfile.mkstemp(prefix='.status-', dir=directory)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as file:
+            json.dump(value, file, separators=(',', ':'), allow_nan=False)
+        os.replace(temp, directory / name)
+    finally:
+        if os.path.exists(temp): os.unlink(temp)
+
+
 def main():
     try:
         data = json.loads(sys.stdin.read(1_000_001))
-        snapshot = {'captured_at': time.time(), 'rate_limits': extract(data)}
+        limits = extract(data)
         directory = Path.home() / 'Library' / 'Application Support' / 'UsageEdge' / 'ClaudeStatus'
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(directory, 0o700)
-        fd, temp = tempfile.mkstemp(prefix='.snapshot-', dir=directory)
+        now = time.time()
+        diagnostic = {'checked_at': now, 'rate_limits_present': isinstance(data, dict) and isinstance(data.get('rate_limits'), dict), 'valid_window_count': len(limits)}
+        diagnostic_path = directory / 'diagnostic.json'
         try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as file:
-                json.dump(snapshot, file, separators=(',', ':'), allow_nan=False)
-            os.replace(temp, directory / 'snapshot.json')
-        finally:
-            if os.path.exists(temp): os.unlink(temp)
+            old = json.loads(diagnostic_path.read_text(encoding='utf-8'))
+            unchanged = (old.get('rate_limits_present') == diagnostic['rate_limits_present'] and old.get('valid_window_count') == diagnostic['valid_window_count'] and 0 <= now - old.get('checked_at', 0) < 30)
+        except (OSError, ValueError, TypeError, AttributeError):
+            unchanged = False
+        if not unchanged:
+            try: save_atomic(directory, 'diagnostic.json', diagnostic)
+            except OSError: pass
+        if limits:
+            save_atomic(directory, 'snapshot.json', {'captured_at': now, 'rate_limits': limits})
     except (OSError, ValueError, TypeError):
         pass
     print('Claude')

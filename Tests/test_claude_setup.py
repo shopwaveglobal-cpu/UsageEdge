@@ -20,7 +20,8 @@ class SetupTests(unittest.TestCase):
             self.assertEqual(value['theme'], 'dark')
             self.assertEqual(value['statusLine']['type'], 'command')
             self.assertIn('claude_status.py', value['statusLine']['command'])
-            self.assertEqual(Path(shlex.split(value['statusLine']['command'])[1]), path.with_name('claude_status.py'))
+            self.assertEqual(Path(shlex.split(value['statusLine']['command'])[1]), file.parent / 'usageedge' / 'claude_status.py')
+            self.assertEqual((file.parent / 'usageedge' / 'claude_status.py').read_bytes(), path.with_name('claude_status.py').read_bytes())
     def test_refuses_existing_statusline_and_bad_json(self):
         with tempfile.TemporaryDirectory() as folder:
             file = Path(folder) / 'settings.json'
@@ -33,6 +34,25 @@ class SetupTests(unittest.TestCase):
             file = Path(folder) / 'new' / 'settings.json'
             setup.install(file)
             self.assertEqual(file.stat().st_mode & 0o777, 0o600)
+            before = file.read_bytes()
+            setup.install(file)
+            self.assertEqual(file.read_bytes(), before)
+    def test_disconnect_preserves_other_settings(self):
+        with tempfile.TemporaryDirectory() as folder:
+            file = Path(folder) / 'settings.json'
+            file.write_text('{"theme":"dark"}')
+            setup.install(file)
+            setup.uninstall(file)
+            self.assertEqual(json.loads(file.read_text()), {'theme': 'dark'})
+
+    def test_disconnect_refuses_other_statusline(self):
+        with tempfile.TemporaryDirectory() as folder:
+            file = Path(folder) / 'settings.json'
+            before = '{"statusLine":{"type":"command","command":"other"}}'
+            file.write_text(before)
+            with self.assertRaises(ValueError): setup.uninstall(file)
+            self.assertEqual(file.read_text(), before)
+
     def test_refuses_symlink(self):
         with tempfile.TemporaryDirectory() as folder:
             target = Path(folder) / 'target.json'; target.write_text('{}')
