@@ -236,7 +236,7 @@ final class UsageModel: ObservableObject {
  }
  func checkScheduledNotifications() {
   UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-   let count = requests.filter { $0.identifier.hasPrefix("Claude.") || $0.identifier.hasPrefix("Codex.") }.count
+   let count = requests.filter { request in ["Claude.", "Codex.", "Kimi."].contains { request.identifier.hasPrefix($0) } }.count
    DispatchQueue.main.async { self.notificationStatus = "초기화 알림 \(count)개 예약됨" }
   }
  }
