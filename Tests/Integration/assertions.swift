@@ -72,6 +72,8 @@ let lastUpdated = stale.updated
 stale.completeRefresh([], status: "실행 실패")
 precondition(stale.windows.first?.remaining == 42, "failed refresh erased the last known quota")
 precondition(stale.updated == lastUpdated && stale.status.contains("오래된 값"), "failed refresh must mark the observation stale")
+stale.refresh()
+precondition(stale.status.contains("오래된 값"), "retry must not make stale Codex quota look fresh")
 func scenario(_ mode: String, expected: String, shouldOpen: Bool) {
  setenv("USAGEEDGE_FAKE_MODE", mode, 1); testOpened.removeAll()
  let model = UsageModel(); model.connectCodex()

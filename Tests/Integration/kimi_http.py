@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix='usageedge-kimi-') as tmp:
             ('providerAccess.remove(account: "KimiCodeLocal")', 'testRemove()', 1),
             ('providerAccess.key(account: "KimiCodeLocal")', 'testKey()', 1),
             ('UserDefaults.standard', 'UserDefaults(suiteName: ProcessInfo.processInfo.environment["USAGEEDGE_TEST_DEFAULTS"]!)!', 17),
-            ('scheduleResets("Kimi", windows: []); ', '', 1),
+            ('scheduleResets("Kimi", windows: []); ', '', 2),
             ('self.scheduleResets("Kimi", windows: result); ', '', 1),
         ]
         for before, after, expected in replacements:

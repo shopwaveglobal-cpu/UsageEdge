@@ -137,7 +137,7 @@ final class UsageModel: ObservableObject {
   if copilotEnabled { refreshCopilot() }
   if UserDefaults.standard.bool(forKey: "kimi.enabled") { refreshKimi() }
   for provider in APIProvider.allCases where UserDefaults.standard.bool(forKey: "enabled.\(provider.rawValue)") { refreshAPI(provider) }
-  guard !busy, !loginInProgress else { return }; busy = true; status = "확인 중"
+  guard !busy, !loginInProgress else { return }; busy = true; status = status.contains("오래된 값") ? "오래된 값 · 확인 중" : "확인 중"
 
   DispatchQueue.global(qos: .utility).async {
    let paths = ["/Applications/Codex.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex", "/opt/homebrew/bin/codex", "/usr/local/bin/codex"]
@@ -301,10 +301,11 @@ final class UsageModel: ObservableObject {
   }
  }
  func connectKimi(port: String, token: String) {
-  guard let number = Int(port), KimiLocalRequest.make(port: number, token: token) != nil else { kimiStatus = "포트와 토큰 확인 필요"; return }
-  guard providerAccess.save(token, account: "KimiCodeLocal") else { kimiStatus = "키체인 저장 실패"; return }
+  guard let number = Int(port), KimiLocalRequest.make(port: number, token: token) != nil else { kimiStatus = kimiWindows.isEmpty ? "포트와 토큰 확인 필요" : "오래된 값 · 포트와 토큰 확인 필요"; return }
+  guard providerAccess.save(token, account: "KimiCodeLocal") else { kimiStatus = kimiWindows.isEmpty ? "키체인 저장 실패" : "오래된 값 · 키체인 저장 실패"; return }
   UserDefaults.standard.set(number, forKey: "kimi.port")
   UserDefaults.standard.set(true, forKey: "kimi.enabled")
+  kimiWindows = []; kimiStatus = "확인 중"; scheduleResets("Kimi", windows: []); resize?()
   refreshKimi()
  }
  func disconnectKimi() {
@@ -315,8 +316,8 @@ final class UsageModel: ObservableObject {
  func refreshKimi() {
   kimiVersion += 1; let version = kimiVersion
   guard let token = providerAccess.key(account: "KimiCodeLocal"),
-        let request = KimiLocalRequest.make(port: UserDefaults.standard.integer(forKey: "kimi.port"), token: token) else { kimiStatus = "연결 설정 확인 필요"; return }
-  kimiStatus = "확인 중"
+        let request = KimiLocalRequest.make(port: UserDefaults.standard.integer(forKey: "kimi.port"), token: token) else { kimiStatus = kimiWindows.isEmpty ? "연결 설정 확인 필요" : "오래된 값 · 연결 설정 확인 필요"; return }
+  kimiStatus = kimiStatus.contains("오래된 값") ? "오래된 값 · 확인 중" : "확인 중"
   providerAccess.fetchKimi(request) { code, data in
    let result = (code == 200 && (data?.count ?? 0) <= 1_000_000) ? data.map(KimiServerQuota.parse) ?? [] : []
    DispatchQueue.main.async {
